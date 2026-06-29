@@ -60,10 +60,13 @@ jobs:
           else
             echo "OK: no flagged capability-surface APIs introduced."
           fi
-      - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Secret scan (gitleaks)
+        # The gitleaks-action@v2 requires a PAID license for organizations; the gitleaks BINARY is free.
+        # Pinned version (reproducible + supply-chain friendly). --exit-code 1 fails the job on any leak.
+        run: |
+          VER=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks detect --no-git --source . --redact --no-banner --exit-code 1
 
   build:
     name: Build + test (Windows)
@@ -82,13 +85,16 @@ jobs:
       - name: Build both DLLs
         shell: pwsh
         run: |
+          # The .ps1 throws on failure (its ErrorActionPreference=Stop) -> a non-zero step exit. Do NOT gate on
+          # $LASTEXITCODE: a pure-cmdlet .ps1 (e.g. package.ps1) runs no native command, so it stays $null and
+          # "$null -ne 0" is TRUE -> a false failure.
+          $ErrorActionPreference = 'Stop'
           .\build.ps1 -QtDir "$env:QT_ROOT_DIR"
-          if ($LASTEXITCODE -ne 0) { throw "build failed" }
       - name: Package the overlay
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           .\package.ps1 -QtDir "$env:QT_ROOT_DIR"
-          if ($LASTEXITCODE -ne 0) { throw "package failed" }
       - name: XInput ordinal parity (must match System32)
         shell: pwsh
         run: |
