@@ -44,7 +44,7 @@ With no `--local`, `install`/`update` download from GitHub (the latest stable by
 - **Backs up** any pre-existing file it would overwrite (e.g. a genuine `XINPUT1_3.dll`) to `<file>.snaphak-bak`.
 - Records the install (files placed + backups taken) in `%LOCALAPPDATA%\open-snaphak\install.json`.
 - **`uninstall`** reverses *exactly* that record: removes the files it placed, restores the backups, and cleans
-  the dirs it created **only if they're empty** — a pre-existing `plugins/` or other content is left intact. Your
+  the dirs it created **only if they're empty** — a pre-existing `platforms/` or other content is left intact. Your
   `%USERPROFILE%\snaphak` data (overrides / prefabs / rawmaps) is **never** touched.
 
 ## Releases & channels

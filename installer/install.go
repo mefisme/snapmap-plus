@@ -174,11 +174,10 @@ func cmdUninstall(f flags) error {
 		fmt.Printf("  ~ restored %s\n", bk.Rel)
 	}
 	// 3) clean up the dirs we created. snaphak_logs/ is unambiguously ours (runtime logs) -> remove it whole;
-	//    snaphak/ + plugins/ only if now empty (a pre-existing tree is left intact).
+	//    snaphak/ + platforms/ only if now empty (a pre-existing tree is left intact).
 	os.RemoveAll(filepath.Join(doom, "snaphak_logs"))
 	removeIfEmpty(filepath.Join(doom, "snaphak"))
-	removeIfEmpty(filepath.Join(doom, "plugins", "platforms"))
-	removeIfEmpty(filepath.Join(doom, "plugins"))
+	removeIfEmpty(filepath.Join(doom, "platforms"))
 	// 4) auto-cleanup our app-data folder: the record, the saved token, and the stable snaphak.exe copy.
 	//    The user's %USERPROFILE%\snaphak modding data is NEVER touched.
 	cleanupAppData()

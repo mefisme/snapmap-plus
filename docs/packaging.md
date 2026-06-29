@@ -14,7 +14,7 @@ copied from the contributor's Qt SDK at package time).
 | `snaphak\Qt5Core.dll` | Qt SDK | Qt 5.9.9 runtime (5,842,040 B) |
 | `snaphak\Qt5Gui.dll` | Qt SDK | Qt 5.9.9 runtime (6,061,688 B) |
 | `snaphak\Qt5Widgets.dll` | Qt SDK | Qt 5.9.9 runtime (5,599,352 B) |
-| `plugins\platforms\qwindows.dll` | Qt SDK | Qt platform plugin — **required or Qt won't start** (1,357,432 B) |
+| `platforms\qwindows.dll` | Qt SDK | Qt platform plugin — **required or Qt won't start**; must sit beside `DOOMx64vk.exe` so Qt finds it (1,357,432 B) |
 
 The two clone DLLs are ~384 KB (backend) and ~1.57 MB (frontend); their exact size shifts per build
 (MSVC embeds a build timestamp), so equivalence is judged on the export/ordinal surface, not byte size.
@@ -28,8 +28,14 @@ The four Qt files are fixed SDK images.
 ├── snaphak/
 │   ├── snaphakui.dll
 │   ├── Qt5Core.dll  Qt5Gui.dll  Qt5Widgets.dll
-└── plugins/platforms/qwindows.dll
+└── platforms/qwindows.dll        # beside DOOMx64vk.exe -- where Qt searches for its platform plugin
 ```
+
+> **Why `platforms\` and not `plugins\platforms\`:** the frontend sets no Qt plugin path in code, so Qt only
+> searches `<DOOMx64vk.exe dir>\platforms\` on a machine without Qt installed. A dev box with Qt installed
+> finds the plugin via Qt's build-time path regardless — which is why a too-deep `plugins\platforms\` layout
+> appears to work in development but fails on a clean machine with *"could not find or load the Qt platform
+> plugin windows"*.
 
 `dist/` mirrors this tree. The installer (`snaphak.exe`) — or a manual drop-in — merges it into the DOOM
 root. The "SnapHak Studio" window opens in the SnapMap editor (run `sh` in the console if it doesn't

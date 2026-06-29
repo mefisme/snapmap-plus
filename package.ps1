@@ -1,7 +1,7 @@
 # package.ps1 -- assemble the deployable SnapHak overlay into dist\ (the tree you drop into a DOOM install).
 # Pure ASCII (PS 5.1 reads BOM-less UTF-8 as 1252).
 #
-# This is SnapHak's packaging step: shipping the snaphak\ + plugins\ Qt runtime alongside the two clone
+# This is SnapHak's packaging step: shipping the snaphak\ + platforms\ Qt runtime alongside the two clone
 # DLLs is done here. It consumes the DLLs built by build.ps1 (in build\) and copies the Qt 5.9.9
 # runtime from the Qt SDK. Output is the 6-file overlay documented in docs\packaging.md, plus a
 # MANIFEST.sha256 (the install/verify map + hash transparency for releases).
@@ -44,7 +44,9 @@ if (-not (Test-Path $qtPlat)) { throw "missing plugins\platforms\qwindows.dll un
 # --- assemble dist\ fresh ---
 if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
 $snapDir = Join-Path $dist "snaphak"
-$platDir = Join-Path $dist "plugins\platforms"
+# qwindows.dll MUST land in <root>\platforms\ (beside DOOMx64vk.exe), NOT plugins\platforms\: no Qt plugin
+# path is set in code, so on a machine WITHOUT Qt installed, Qt only searches <game-exe-dir>\platforms\.
+$platDir = Join-Path $dist "platforms"
 New-Item -ItemType Directory -Force $snapDir | Out-Null
 New-Item -ItemType Directory -Force $platDir | Out-Null
 
@@ -57,7 +59,7 @@ Copy-Item $qtPlat (Join-Path $platDir "qwindows.dll")
 $files = @(
     "XINPUT1_3.dll",
     "snaphak\snaphakui.dll", "snaphak\Qt5Core.dll", "snaphak\Qt5Gui.dll", "snaphak\Qt5Widgets.dll",
-    "plugins\platforms\qwindows.dll"
+    "platforms\qwindows.dll"
 )
 $lines = foreach ($f in $files) {
     $h = (Get-FileHash (Join-Path $dist $f) -Algorithm SHA256).Hash
