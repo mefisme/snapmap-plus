@@ -660,25 +660,28 @@ static int ae_active_module_for_spawn(const uint8_t *ed, const void *lm)
     return -1;                                          /* leave it global (always save-safe) */
 }
 
-/* Re-base the just-spawned (now-selected) entities from a WORLD grab position into module M's local frame.
+/* Re-base the just-spawned (now-selected) entities from a WORLD grab position into module M's LOCAL frame.
  * PasteInstantiate stores a WORLD transform (correct for the global bucket), but a module entity's position is
- * stored + rendered module-origin-relative, so a world value in bucket M renders at moduleOrigin+world -- way
- * off (proven live: the spawned entity sat outside the module and moved rigidly with it). Convert the translation
- * world->local via WorldToModuleLocal (the exact inverse the engine applies at render) and re-dirty. TRANSLATION
- * only: the basis is left world-oriented (correct for an axis-aligned module; a rotated module leaves only a
- * cosmetic icon-orientation delta). The SPAWN branch had nothing selected before the paste, so the selection now
- * IS the new entity set. All reads SEH-guarded; a fault leaves the entity as-is (no worse than the pre-fix global
- * position). No-op unless anchored to a real module AND the convert resolved. */
+ * stored module-LOCAL and the render composes the module transform M back onto it -- so a raw world value in
+ * bucket M renders at M*world, way outside the module (live-proven). The correct stored value is M^-1 * world.
+ * Use ModuleContainTransform (FUN_1405546b0 = rawMatrix^-1 * world -- the SAME world->local the editor pick feeds
+ * into the module OBB test, so it IS the entity storage frame), NOT WorldToModuleLocal (FUN_1405a8be0/FUN_140554fe0
+ * = rawMatrix * world, the INVERSE direction -- that drove the misplacement that GREW with module distance; the
+ * two differ by one matrix inverse FUN_141a82c70). TRANSLATION only: the basis is left world-oriented (exact for an
+ * axis-aligned module; a rotated module leaves a cosmetic icon-orientation delta). The SPAWN branch had nothing
+ * selected before the paste, so the selection now IS the new entity set. All reads SEH-guarded; a fault leaves the
+ * entity as-is. No-op unless anchored to a real module AND the transform resolved. */
 static void ae_rebase_selection_to_module(const uint8_t *ed, void *lm, int M)
 {
-    if (!g_world_to_local || M < 0) return;
-    void *sel = NULL, *ids = NULL, *arr = NULL;
+    if (!g_module_contain_xform || M < 0) return;
+    void *sel = NULL, *ids = NULL, *arr = NULL, *tblBase = NULL;
     int count = 0;
+    if (!ae_read_ptr((const uint8_t *)lm + LM_MODXFORM_OFF, &tblBase) || tblBase == NULL) return;
+    const uint8_t *E = (const uint8_t *)tblBase + (size_t)M * MOD_TBL_STRIDE;   /* module M's transform-table entry */
     if (!ae_read_ptr(ed + ED_SEL_OBJ_OFF, &sel) || sel == NULL) return;
     if (!ae_read_u32_safe((const uint8_t *)sel + SEL_COUNT_OFF, &count) || count <= 0) return;
     if (!ae_read_ptr((const uint8_t *)sel + SEL_IDS_OFF, &ids) || ids == NULL) return;
     if (!ae_read_ptr((const uint8_t *)lm + ARR_ENT_ARRAY_OFF, &arr) || arr == NULL) return;
-    void *modtbl = (void *)((uint8_t *)lm + LM_MODXFORM_OFF);
     for (int i = 0; i < count && i < 64; i++) {
         int id = -1;
         if (!ae_read_u32_safe((const uint8_t *)ids + (size_t)i * 4, &id) || id < 0) continue;
@@ -688,9 +691,13 @@ static void ae_rebase_selection_to_module(const uint8_t *ed, void *lm, int M)
             float *xf = (float *)((uint8_t *)ent + ENT_XFORM_OFF);
             float world[3] = { xf[0], xf[1], xf[2] };
             float local[3] = { 0.0f, 0.0f, 0.0f };
-            g_world_to_local(modtbl, local, M, world);       /* world -> module-M-local (identity if M==modCnt) */
+            g_module_contain_xform((const void *)E, local, world);   /* world -> module-M-local (M^-1 * world) */
             xf[0] = local[0]; xf[1] = local[1]; xf[2] = local[2];
             *(volatile uint32_t *)((uint8_t *)ent + ENT_DIRTY_OFF) |= 3u;   /* force a transform re-render */
+            { char ln[152]; _snprintf_s(ln, sizeof ln, _TRUNCATE,
+                "create-timeline: rebase id=%d M=%d world=(%.1f,%.1f,%.1f) -> local=(%.1f,%.1f,%.1f)",
+                id, M, (double)world[0], (double)world[1], (double)world[2],
+                (double)local[0], (double)local[1], (double)local[2]); backend_log(ln); }
         }
         __except (EXCEPTION_EXECUTE_HANDLER) { backend_log("create-timeline: rebase SEH (entity transform)"); }
     }
