@@ -16,4 +16,10 @@
  * If either creator can't be resolved, nothing is installed and the tool stays stock. */
 void sh_wiring_cleandirect_install(const uint8_t *module_base);
 
+/* A monotonic counter bumped each time the wire-any hook processes a target pick (a connect edit). The UI
+ * polls it (via the iface +0x288 slot) alongside entity_count and rebuilds the entity list when it changes,
+ * so the chain's module-name labels re-read + settle after a wire (which nets no entity-count change).
+ * Read-only for callers; increments only. */
+int sh_wiring_cleandirect_generation(void);
+
 #endif /* BACKEND_WIRING_CLEANDIRECT_H */

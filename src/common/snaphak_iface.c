@@ -274,6 +274,8 @@ void sh_iface_bind_engine_slots(const sh_iface_engine_slots *s)
     g_iface_vtbl_live.enum_inherits          = s->enum_inherits;          /* +0x278 */
     /* clone-extension (the dev-layer entity-hidden query). */
     g_iface_vtbl_live.id_dev_layer_hidden    = s->id_dev_layer_hidden;    /* +0x280 */
+    /* clone-extension (the wire-any connect-edit generation counter; entity-list re-read signal). */
+    g_iface_vtbl_live.wire_edit_generation   = s->wire_edit_generation;   /* +0x288 */
 }
 
 /* --------------------------------------------------------------------- the factory -----------------

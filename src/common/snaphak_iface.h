@@ -163,6 +163,7 @@ typedef int          (*sh_enum_inherits_fn)(struct sh_iface *self,
  * match what the editor shows. Returns 0 when the cvar is on, a read faults, or the editor is down
  * (fail-safe: never hide on uncertainty). A raw layer-bit read -> thread-safe on the Qt UI thread. */
 typedef int          (*sh_id_dev_layer_hidden_fn)(struct sh_iface *self, int id);                /* +0x280 (ext 3) */
+typedef int          (*sh_wire_edit_generation_fn)(struct sh_iface *self);                       /* +0x288 (ext 4) */
 
 /* ------------------------------------------------------------------ heavy apply slots --------
  * The heavy serialize/deserialize/apply slots the SnapStack APPLY-ops (bss/bsi/bsf/bsb/bse/accl/
@@ -333,6 +334,8 @@ typedef struct sh_iface_vtbl {
     sh_enum_valid_classes_fn  enum_valid_classes;    /* +0x270 (ext 1) class-dropdown enumerator */
     sh_enum_inherits_fn       enum_inherits;         /* +0x278 (ext 2) inherit-dropdown enumerator */
     sh_id_dev_layer_hidden_fn id_dev_layer_hidden;   /* +0x280 (ext 3) dev-layer entity-hidden query */
+    sh_wire_edit_generation_fn wire_edit_generation; /* +0x288 (ext 4) wire-any connect-edit generation counter
+                                                      * (entity-list re-read signal; see wiring_cleandirect.c) */
 } sh_iface_vtbl;
 
 /* ------------------------------------------------------------------ the interface object -----------
@@ -454,6 +457,8 @@ typedef struct sh_iface_engine_slots {
     sh_enum_inherits_fn          enum_inherits;         /* +0x278 (ext 2) */
     /* clone-extension: the dev-layer entity-hidden query. */
     sh_id_dev_layer_hidden_fn    id_dev_layer_hidden;   /* +0x280 (ext 3) */
+    /* clone-extension: the wire-any connect-edit generation counter (entity-list re-read signal). */
+    sh_wire_edit_generation_fn   wire_edit_generation;  /* +0x288 (ext 4) */
 } sh_iface_engine_slots;
 
 void sh_iface_bind_engine_slots(const sh_iface_engine_slots *slots);

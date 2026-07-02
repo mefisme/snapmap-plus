@@ -51,6 +51,18 @@ static volatile LONG  g_installed      = 0;
 static creator_fn     g_orig_base      = NULL;   /* trampoline to stock cdbb40 */
 static creator_fn     g_orig_outnode   = NULL;   /* trampoline to stock cdb990 */
 
+/* Monotonic "a wire-any connect edit happened" counter. Bumped whenever the wire-any hook processes a real
+ * target pick (below). The Studio entity list rebuilds its module-name labels ONLY on an entity-COUNT change
+ * (a wire connect nets none), so after a wire the labels go stale until a manual refresh. The UI think-loop
+ * polls this (via the iface +0x288 slot) alongside entity_count and forces a list rebuild when it changes --
+ * so the labels auto-settle. Read-only from the UI; the backend only ever increments it. */
+static volatile LONG  g_connect_generation = 0;
+
+int sh_wiring_cleandirect_generation(void)
+{
+    return (int)g_connect_generation;
+}
+
 /* Resolve the hovered target's decl-flags byte pointer from (world, idx). Returns the byte* or NULL. */
 static uint8_t *wcd_target_flags(void *world, int idx)
 {
@@ -96,6 +108,12 @@ static void wcd_run(creator_fn stock, void *tool, void *world, int idx)
     stock(tool, world, idx);                          /* the STOCK creator does all the work */
 
     if (forced) { __try { *flagp = old; } __except (EXCEPTION_EXECUTE_HANDLER) {} }
+
+    /* Signal the UI that a wire-any connect edit occurred (idx >= 0 = a real target pick). The Studio think-
+     * loop reads sh_wiring_cleandirect_generation() (iface +0x288) alongside entity_count and rebuilds the
+     * entity list when it changes -- so the chain's module-name labels re-read + settle after a wire (which
+     * nets no entity-count change), with no manual refresh. Bumped per pick; the UI debounces/windows it. */
+    if (idx >= 0) InterlockedIncrement(&g_connect_generation);
 }
 
 static void connect_creator_base_detour(void *tool, void *world, int idx)

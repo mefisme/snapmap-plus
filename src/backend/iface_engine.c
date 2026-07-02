@@ -32,6 +32,7 @@
 #include "backend_log.h"
 #include "typeinfo.h"       /* sh_typeinfo_class_derives + the LIVE registry walks (collect_records/inherits) */
 #include "valid_class_map.h" /* SH_VCM_* -- the class-dropdown static snapshot (used only if the live walk fails) */
+#include "wiring_cleandirect.h" /* sh_wiring_cleandirect_generation -- the wire-any connect-edit counter (+0x288) */
 
 /* ---- editor-struct field offsets (this-live-build; ported from the reference implementation, SEH-guarded) ------------ */
 /* EDITOR_SINGLETON_RVA: the INLINE idSnapEditorLocal OBJECT (NOT a pointer) at module_base + this. A
@@ -989,6 +990,13 @@ static int slot_id_dev_layer_hidden(sh_iface *self, int id)
     return (bits & 1u) == 0 ? 1 : 0;   /* not in the base layer -> dev-layer -> hidden when the cvar is off */
 }
 
+/* +0x288 ext 4: the wire-any connect-edit GENERATION counter. Bumped by wiring_cleandirect.c each time the
+ * wire-any hook processes a target pick. A wire connect nets no entity-COUNT change, so the Studio entity
+ * list (rebuilt only on a count change) leaves the chain's module-name labels stale until a manual refresh.
+ * The UI think-loop polls THIS alongside entity_count and forces a list rebuild when it changes -- so the
+ * labels auto-settle after a wire (mirroring the spawn_rebuild_frames pattern). */
+static int slot_wire_edit_generation(sh_iface *self) { (void)self; return sh_wiring_cleandirect_generation(); }
+
 /* ================================================================ install ========================== */
 
 int sh_iface_engine_install(const sig_result *results, size_t n, const uint8_t *module_base)
@@ -1051,6 +1059,8 @@ int sh_iface_engine_install(const sig_result *results, size_t n, const uint8_t *
     slots.enum_inherits          = slot_enum_inherits;        /* +0x278 ext 2 */
     /* clone-extension: the dev-layer entity-hidden query (Entities/Timelines list filter). */
     slots.id_dev_layer_hidden    = slot_id_dev_layer_hidden;  /* +0x280 ext 3 */
+    /* clone-extension: the wire-any connect-edit generation counter (entity-list re-read signal). */
+    slots.wire_edit_generation   = slot_wire_edit_generation; /* +0x288 ext 4 */
     /* fold in the heavy apply-chain slots (serialize entity +0xc8 / schedule-apply +0xd0 /
      * read-prefab +0xb8). sh_apply_engine_install must have run first (dllmain orders it before this) so
      * its engine fns are resolved; the slot bodies themselves null-check + degrade if a dep is missing. */
