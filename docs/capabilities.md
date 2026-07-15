@@ -53,11 +53,8 @@ Console variables; defaults shown in parentheses.
 Subcommands of `sh`, operating on numbered entity-id stacks and named groups. A numbered stack
 is one-shot scratch — apply/use ops drain it; move a set into a named group (`pop2g`) to reuse it.
 
-As of the 2026-07-13 backend port, the SnapStack stores + all 20 handlers live in the **shared
-backend** (`src/backend/snapstack.c` + `json_patch.c`), so they are available under **both** frontends —
-including the Qt-free WebView2 build, which previously had none of them. Registration is additive: the
-backend registers its copy before any frontend loads, and the Qt frontend still re-registers its own
-handlers over the 20 shared names, so Qt's behavior is unchanged. See
+The SnapStack stores + all 20 handlers live in the **backend** (`src/backend/snapstack.c` +
+`json_patch.c`) — the sole implementation, registered once before the frontend loads. See
 [`backend-changes.md`](backend-changes.md) for the port's design + the deferred-apply/`json_patch` fixes.
 
 **The 20 OG subcommands** (usage `sh <op> <stack> …`; a numbered stack index; several ops also accept a

@@ -3,23 +3,23 @@
 An open-source, clean-room reimplementation of **SnapHak** — Chrispy's closed-source modding tool for
 DOOM 2016's in-game **SnapMap** level editor. It builds to two drop-in DLLs that, deployed into a stock
 DOOM 2016 install, reproduce SnapHak's editor extensions: the console-command/cvar hook layer and the
-"SnapHak Studio" Qt window.
+"SnapHak Studio" window.
 
 **This repo ships NO DOOM or SnapHak bytes.** Every line is built from the project's own reverse-engineering
 of the engine and the original tool — no decompiled or copied binary content. The original SnapHak is
 closed-source; this is an independent, ground-up reimplementation. Legitimate single-player game-modding
-research; the third-party runtime it links against (Qt, the DOOM engine) is not included.
+research; the third-party runtime it links against (the DOOM engine, Microsoft's WebView2 runtime) is not included.
 
 ## Repository layout
 
 | Path | What |
 |---|---|
 | `src/backend/` | the backend DLL (`XINPUT1_3.dll`): the hook layer, 24 console commands, 9 cvars, cvar-unlock, and the resident fault-shield |
-| `src/ui/` | the frontend DLL (`snaphakui.dll`): the Qt **"SnapHak Studio"** window |
+| `src/ui/` | the frontend DLL (`snaphakui.dll`): the WebView2 **"SnapHak Studio"** window (`webview/` = the host + `mockup.html`) |
 | `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
 | `src/fault_shield/` | the recover-in-place vectored-exception fault shield (compiled into the backend) |
-| `build-backend.ps1` / `build-qt.ps1` / `build-webview.ps1` | compile the DLLs → `build/` (backend only · backend+Qt · backend + the experimental webview UI) |
-| `package-qt.ps1` / `package-webview.ps1` | assemble the deployable overlay → `dist/` (Qt, with its runtime bundled · webview, no Qt) |
+| `build-backend.ps1` / `build.ps1` | compile the DLLs → `build/` (backend only · backend + frontend) |
+| `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs, no Qt runtime) |
 | `installer/` | `snaphak.exe` — the end-user install / update / uninstall CLI (Go) |
 | `docs/` | architecture · fidelity · capabilities · packaging |
 
@@ -38,24 +38,23 @@ auto-detects your DOOM install via Steam, asks you to confirm, and installs. (Fr
 
 ## Build from source
 
-**Requirements** (exact download links + the Qt 5.9.9 install walkthrough are in [`docs/contributing.md`](docs/contributing.md))
+**Requirements** (exact download links + setup are in [`docs/contributing.md`](docs/contributing.md))
 - **MSVC 2022 Build Tools** (the "Desktop development with C++" workload)
-- **Qt 5.9.9** for MSVC 2017 64-bit at `C:\Qt\5.9.9\msvc2017_64` (override with `-QtDir`)
 - **Go 1.21+** (only to build the installer)
 
-```powershell
-# 1. compile both DLLs -> build/XINPUT1_3.dll + build/qt/snaphakui.dll
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File build-qt.ps1
+The frontend renders in the Microsoft Edge **WebView2 runtime** (preinstalled on Windows 11 / most Windows 10);
+its SDK is auto-fetched from NuGet at build time. No Qt or other UI toolkit to install.
 
-# 2. assemble the deployable overlay -> dist/ (the 6-file DOOM tree: DLLs + Qt runtime)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File package-qt.ps1
+```powershell
+# 1. compile both DLLs -> build/XINPUT1_3.dll + build/webview/snaphakui.dll
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File build.ps1
+
+# 2. assemble the deployable overlay -> dist/ (the 2-file DOOM tree: the two clone DLLs)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File package.ps1
 
 # 3. (optional) build the installer
 cd installer ; go build -o snaphak.exe .
 ```
-
-(There's also an experimental Qt-free WebView2 frontend -- `build-webview.ps1` / `package-webview.ps1` --
-see [`docs/webview-ui.md`](docs/webview-ui.md). Not the default; CI still builds the Qt path above.)
 
 ## Deploy a local build (contributors / testing)
 
@@ -111,7 +110,7 @@ build → package → test loop, the pull-request workflow, and the rule that th
 code — is in **[`docs/contributing.md`](docs/contributing.md)**. The short version:
 
 1. **Fork** this repo (or branch, if you have write access).
-2. Make your change under `src/`. Build (`build-qt.ps1`), package (`package-qt.ps1`), and test it in your own DOOM
+2. Make your change under `src/`. Build (`build.ps1`), package (`package.ps1`), and test it in your own DOOM
    via `installer\snaphak.exe install --local dist`.
 3. Open a **pull request** against `main`. The CI gate runs a security scan (no new binaries · capability-surface
    scan · gitleaks), the Windows build + package, the XInput ordinal-parity check, the C unit tests
@@ -123,7 +122,7 @@ code — is in **[`docs/contributing.md`](docs/contributing.md)**. The short ver
   adds one**. The source is the only deliverable; CI builds the binaries.
 - **Clean-room only.** Contribute your **own** RE/implementation. Do not paste decompiled or copyrighted
   DOOM/SnapHak content.
-- **Match the surrounding code** — the backend is plain C, the UI is Qt/C++; keep source **pure ASCII** (the
+- **Match the surrounding code** — the backend is plain C, the frontend is C++ + HTML/CSS/JS; keep source **pure ASCII** (the
   PowerShell build reads BOM-less UTF-8 as Windows-1252). Run **`gofmt`** on anything in `installer/`.
 
 Because the tool injects into DOOM, the release channel is a supply-chain target. PR CI runs in a
@@ -135,7 +134,7 @@ do any of that.
 
 A few committed headers are **generated data tables** derived from the project's reverse-engineering of the
 engine and the original tool, not hand-authored source: `src/ui/sh_*.h` (entity descriptions, event
-catalog/docs, asset lists, the inherit/class universe) and `src/backend/class_universe.h`. They're checked in
+catalog/docs, asset lists) and `src/backend/class_universe.h`. They're checked in
 so the repo builds standalone — treat them as **vendored**: don't hand-edit them in a PR; open an issue
 describing the change instead.
 
@@ -143,10 +142,10 @@ describing the change instead.
 
 | Doc | What |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | the 3-object model (window / controller / backend-owned interface), the 30 Hz think-loop, the 77-slot interface vtable, the backend↔frontend boundary |
+| [`docs/architecture.md`](docs/architecture.md) | the backend↔frontend boundary, the WebView2 host, the 30 Hz think-loop, the 77-slot interface vtable |
 | [`docs/fidelity.md`](docs/fidelity.md) | the original's quirks the clone reproduces on purpose, and the one sanctioned divergence (the fault-shield) |
 | [`docs/capabilities.md`](docs/capabilities.md) | the full feature inventory — every console command, cvar, SnapStack op, and GUI tab |
-| [`docs/packaging.md`](docs/packaging.md) | the deployable bundle: the 6-file overlay + the Qt runtime |
+| [`docs/packaging.md`](docs/packaging.md) | the deployable bundle: the lean 2-file overlay |
 
 ## Overrides (runtime, not shipped)
 

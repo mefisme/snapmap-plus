@@ -1,28 +1,26 @@
-# package-webview.ps1 -- assemble the deployable Qt-free WebView2 SnapHak overlay into dist\ (the tree you
-# drop into a DOOM install). Pure ASCII (PS 5.1 reads BOM-less UTF-8 as 1252).
+# package.ps1 -- assemble the deployable SnapHak overlay into dist\ (the tree you drop into a DOOM
+# install). Pure ASCII (PS 5.1 reads BOM-less UTF-8 as 1252).
 #
-# Unlike package-qt.ps1 (the Qt frontend variant, which also bundles the Qt 5.9.9 runtime DLLs), this ships
-# ONLY the two clone DLLs -- the WebView2 frontend has no Qt dependency and uses the system-installed
-# WebView2 runtime (preinstalled on Windows 11; evergreen on most Windows 10) at run time, so there is
-# nothing else to bundle.
+# Ships ONLY the two clone DLLs -- the WebView2 (HTML) frontend has no Qt dependency and uses the
+# system-installed WebView2 runtime (preinstalled on Windows 11; evergreen on most Windows 10) at run
+# time, so there is nothing else to bundle.
 #
-# Consumes the DLLs built by src\backend\build.ps1 (XINPUT1_3.dll) and src\ui\build-webview.ps1
-# (snaphakui.dll), both in build\.
+# Consumes the DLLs built by src\backend\build.ps1 (XINPUT1_3.dll) and src\ui\build.ps1 (snaphakui.dll),
+# both in build\.
 #
 # Usage:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File package-webview.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1
 $ErrorActionPreference = "Stop"
 $here  = Split-Path -Parent $MyInvocation.MyCommand.Path   # open-snaphak\
 $build = Join-Path $here "build"
 $dist  = Join-Path $here "dist"
 
-# --- consume build\ : both clone DLLs must be present. The webview frontend lands in build\webview\
-#     (kept separate from build\qt\, which package-qt.ps1 reads instead -- both frontends build a file
-#     literally named snaphakui.dll, so a shared build\ path would let one silently overwrite the other). ---
+# --- consume build\ : both clone DLLs must be present. The frontend lands in build\webview\snaphakui.dll,
+#     the backend directly in build\XINPUT1_3.dll. ---
 $backendDll = Join-Path $build "XINPUT1_3.dll"
 $uiDll      = Join-Path $build "webview\snaphakui.dll"
 foreach ($d in @($backendDll, $uiDll)) {
-    if (-not (Test-Path $d)) { throw "missing $d -- run build-webview.ps1 first (repo root; builds backend + webview frontend together)." }
+    if (-not (Test-Path $d)) { throw "missing $d -- run build.ps1 first (repo root; builds backend + frontend together)." }
 }
 
 # --- refuse a -Diag (troubleshooting) backend: it is self-labelled DO NOT DISTRIBUTE. The diagnostic

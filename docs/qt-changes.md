@@ -1,7 +1,13 @@
 # Qt frontend changes — bugfix & behavior log
 
-A running log of correctness fixes in the Qt frontend (`src/ui/`, the `snaphakui.dll` built by
-`build-qt.ps1`) — the SnapStack command handlers, the data tabs, and how they drive the shared backend
+> **Historical — the Qt frontend was retired 2026-07-14.** The project migrated to the WebView2 (HTML)
+> frontend as the sole UI (see [`webview-ui.md`](webview-ui.md)); the SnapStack subsystem moved into the
+> backend (`src/backend/snapstack.c`) beforehand. This log is preserved as the development record of the
+> now-removed Qt frontend — its file references (`src/ui/sh_tabs.cpp`, `sh_timeline.cpp`, `build-qt.ps1`, …)
+> point at deleted files. Current frontend work is logged in [`webview-ui.md`](webview-ui.md).
+
+A running log of correctness fixes in the Qt frontend (`src/ui/`, the `snaphakui.dll` built by the
+former `build-qt.ps1`) — the SnapStack command handlers, the data tabs, and how they drive the shared backend
 engine layer. Engine-call bugs in `src/backend/` (used by *both* frontends) live in
 [`backend-changes.md`](backend-changes.md); faithful-vs-divergent reproduction of the original's behavior
 lives in [`fidelity.md`](fidelity.md). Entries are chronological, newest first.

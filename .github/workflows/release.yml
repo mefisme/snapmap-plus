@@ -26,11 +26,6 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0   # full history + tags -- the changelog step diffs this tag against the previous one
-      - name: Install Qt 5.9.9
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
-        with:
-          version: '5.9.9'
-          arch: win64_msvc2017_64
       - name: Install Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
@@ -39,10 +34,10 @@ jobs:
         shell: pwsh
         run: |
           # The .ps1 throw on failure (ErrorActionPreference=Stop); do NOT gate on $LASTEXITCODE -- a pure-cmdlet
-          # package-qt.ps1 runs no native command, so it stays $null and "$null -ne 0" is TRUE (a false failure).
+          # package.ps1 runs no native command, so it stays $null and "$null -ne 0" is TRUE (a false failure).
           $ErrorActionPreference = 'Stop'
-          .\build-qt.ps1 -QtDir "$env:QT_ROOT_DIR"
-          .\package-qt.ps1 -QtDir "$env:QT_ROOT_DIR"
+          .\build.ps1
+          .\package.ps1
       - name: Build installer (version-stamped)
         shell: pwsh
         working-directory: installer
@@ -52,10 +47,10 @@ jobs:
       - name: Zip the overlay
         shell: pwsh
         run: |
-          # snaphak-bundle.zip = the 6-file overlay + MANIFEST.sha256 (the installer's --release download target).
-          # snaphak.exe is published as a SEPARATE asset, not bundled into the overlay zip.
+          # snaphak-bundle.zip = the lean overlay (2 DLLs) + MANIFEST.sha256 (the installer's --release download
+          # target). snaphak.exe is published as a SEPARATE asset, not bundled into the overlay zip.
           Compress-Archive -Force -DestinationPath snaphak-bundle.zip `
-            -Path dist\XINPUT1_3.dll, dist\snaphak, dist\platforms, dist\MANIFEST.sha256
+            -Path dist\XINPUT1_3.dll, dist\snaphak, dist\MANIFEST.sha256
       - name: Build the changelog from the commit log
         shell: bash
         run: |

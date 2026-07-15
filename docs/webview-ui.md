@@ -1,25 +1,24 @@
-# Experimental WebView2 frontend (HTML "SnapHak Studio")
+# The SnapHak Studio frontend (WebView2 / HTML)
 
-An alternative, **Qt-free** build of `snaphakui.dll` that renders the "SnapHak Studio" UI as HTML/CSS/JS
-in a Microsoft Edge **WebView2** control instead of a Qt widget tree. It is a drop-in replacement for the
-Qt frontend: same `snaphak_ui_init` entry (export ordinal 10), the same backend interface contract
-(`src/common/snaphak_iface.h`), and the same manual 30 Hz think-loop draining the work-queue (`+0x1a0`).
-The backend (`XINPUT1_3.dll`) is unchanged.
+`snaphakui.dll` renders the "SnapHak Studio" UI as HTML/CSS/JS in a Microsoft Edge **WebView2** control.
+It is **the** frontend: the `snaphak_ui_init` entry (export ordinal 10), the backend interface contract
+(`src/common/snaphak_iface.h`), and a manual 30 Hz think-loop draining the work-queue (`+0x1a0`). The
+backend (`XINPUT1_3.dll`) drives it exactly as it drove the earlier Qt frontend.
 
-**Status: experimental / proof-of-concept.** This is a *parallel* frontend, not a replacement of the Qt
-one. The default `build.ps1` still builds the faithful Qt UI; this frontend is built with a separate,
-opt-in script (`build-webview.ps1`). It is not wired into CI.
+**Status: the sole, shipped frontend.** It is built by the default `build.ps1`, packaged by `package.ps1`,
+and covered by CI. (It replaced an earlier Qt frontend, retired 2026-07-14; the ~18 MB Qt runtime is no
+longer bundled — the UI renders in the system-installed WebView2 runtime.)
 
-## Why
+## Why HTML/WebView2 (vs the retired Qt frontend)
 
-- Drop the ~18 MB Qt runtime shipped in the overlay (`Qt5Core` / `Qt5Gui` / `Qt5Widgets` + the `qwindows`
-  platform plugin).
+- No ~18 MB Qt runtime to bundle (`Qt5Core` / `Qt5Gui` / `Qt5Widgets` + the `qwindows` platform plugin) —
+  and no Qt SDK for contributors to install.
 - Iterate on the UI in HTML/CSS/JS instead of a hand-written Qt `setupUi`.
 - Combine the Entities + Entity-State tabs into a single view.
 
 Trade-off: it depends on the Microsoft Edge **WebView2 runtime** (preinstalled on Windows 11 and most
-Windows 10) instead of the bundled Qt DLLs. The compiled DLL is ~120 KB (vs ~1.5 MB for the Qt one) and
-statically links the WebView2 loader, so no extra loader DLL ships.
+Windows 10) instead of a bundled toolkit. The DLL statically links the WebView2 loader, so no extra loader
+DLL ships.
 
 ## Files
 
@@ -27,22 +26,20 @@ statically links the WebView2 loader, so no extra loader DLL ships.
 |---|---|
 | `src/ui/webview/snaphak_ui_webview.cpp` | The WebView2 host: the `snaphak_ui_init` entry, a Win32 window, the WebView2 bring-up, the 30 Hz think-loop, and the JS <-> native bridge. |
 | `src/ui/webview/mockup.html` | The UI (HTML/CSS/JS), embedded into the DLL at build time. Self-populates with sample data when opened in a plain browser (a "preview mode", inert in DOOM). |
-| `src/ui/build-webview.ps1` | Builds a Qt-free `build/snaphakui.dll`: fetches the WebView2 SDK from NuGet into `build/` (gitignored), statically links the loader, embeds the HTML. Reuses the unchanged `sl_exports.cpp` + `snaphakui.def`. |
+| `src/ui/build.ps1` | Builds `build/webview/snaphakui.dll`: fetches the WebView2 SDK from NuGet into `build/` (gitignored), statically links the loader, embeds the HTML. Reuses `sl_exports.cpp` + `snaphakui.def`. Invoked by the repo-root `build.ps1` (backend + frontend in lockstep). |
 
 ## Build + deploy
 
 ```powershell
-# from the repo root -- builds the backend (build/XINPUT1_3.dll) + the Qt-free frontend (build/webview/snaphakui.dll)
-powershell -NoProfile -ExecutionPolicy Bypass -File build-webview.ps1
-# assemble the lean overlay (2 files only: XINPUT1_3.dll + snaphak/snaphakui.dll -- NO Qt runtime)
-powershell -NoProfile -ExecutionPolicy Bypass -File package-webview.ps1   # -> dist/
+# from the repo root -- builds the backend (build/XINPUT1_3.dll) + the frontend (build/webview/snaphakui.dll)
+powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
+# assemble the lean overlay (2 files: XINPUT1_3.dll + snaphak/snaphakui.dll -- no Qt runtime)
+powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1           # -> dist/
 installer\snaphak.exe install --local dist --yes                          # deploy (DOOM must be closed)
 ```
 
-The Qt and WebView frontends build to **separate** output paths (`build/qt/` vs `build/webview/`), so building
-one no longer overwrites the other -- and `package-webview.ps1` assembles a lean overlay that ships **only**
-the two clone DLLs (the WebView2 runtime is system-installed; no Qt DLLs, unlike the Qt overlay from
-`package-qt.ps1`). Runtime log: `<DOOM>\snaphak_logs\webview_poc.log`.
+`package.ps1` assembles a lean overlay that ships **only** the two clone DLLs (the WebView2 runtime is
+system-installed; no Qt DLLs). Runtime log: `<DOOM>\snaphak_logs\webview_poc.log`.
 
 ## How it maps to the backend interface
 

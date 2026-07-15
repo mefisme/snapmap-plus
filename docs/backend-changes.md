@@ -21,7 +21,7 @@ both the Qt and WebView frontends, instead of two copies with the backend's over
   `sh_snapstack_push_ids`/`push_one` helpers. Multi-select pushes the whole selection, single pushes the clicked
   row (dedup on push) — behavior unchanged.
 - **Builds:** `snapstack.cpp` dropped from the Qt source list (`src/ui/build.ps1`); the backend already compiles
-  `snapstack.c`. Both `build-qt.ps1` and `build-webview.ps1` build clean.
+  `snapstack.c`. Both frontends (as they then existed) build clean.
 
 **This resolves the store-duplication limitation** from the 2026-07-13 port entry below: the `chkstk`/`chkgrp`/
 `clrgrp` inspection commands and the push/clear slots now operate on the same store the ops use, on both

@@ -1,94 +1,112 @@
-# build.ps1 -- compile the clean-room FRONTEND DLL (our snaphakui.dll, the Qt "SnapHak Studio" UI) with
-# MSVC (x64) + Qt 5.9. Pure ASCII (PS 5.1 reads BOM-less UTF-8 as 1252). Clones the backend build.ps1
-# toolchain pattern (vswhere -> vcvars64 -> cl) but is C++ + Qt-linking, so it diverges from the backend
-# in three deliberate ways:
-#   1. C++ not C: /EHsc /std:c++17 (Qt 5.9 is C++ and supports c++17).
-#   2. /MD not /MT: Qt 5.9 official MSVC builds link the DYNAMIC CRT; a Qt-linking DLL MUST match Qt's CRT
-#      (the shipped Qt5*.dll import MSVCP140/VCRUNTIME140). The backend is /MT -- the two DLLs are separate
-#      modules so the CRT difference is fine; the interface object crossing the line is POD (raw ptrs +
-#      offsets), never a CRT-allocated C++ object passed across the DLL boundary.
-#   3. Qt include + lib dirs + the snaphak_iface common dir.
+# src/ui/build.ps1 -- build the snaphakui.dll that hosts the SnapHak Studio UI in a Microsoft Edge
+# WebView2 control (HTML/CSS/JS). Same exports + backend contract as the interface expects. Pure ASCII
+# (PS 5.1 reads BOM-less UTF-8 as 1252). Invoked by the repo-root build.ps1 (backend + frontend, lockstep).
 #
-# Usage:
-#   pwsh -File build.ps1                 # -> snaphakui.dll
-#   pwsh -File build.ps1 -Out x.dll      # alternate output name
+# What it does:
+#   1. locate MSVC via vswhere -> vcvars64.
+#   2. fetch the Microsoft.Web.WebView2 SDK (headers + static loader lib) from NuGet into
+#      build\webview2sdk (gitignored) if not already there. NO binaries land in the repo.
+#   3. generate build\obj\uiwv\mockup_html.h from webview\mockup.html (the UI, embedded in the DLL).
+#   4. cl-compile webview\snaphak_ui_webview.cpp + sl_exports.cpp -> build\snaphakui.dll, statically
+#      linking WebView2LoaderStatic.lib (no WebView2Loader.dll to ship) and NO Qt.
 #
-# Sources: snaphak_ui_init.cpp (the 0x129d0 3-object bring-up + the 0x15c04 30 Hz think-loop) +
-# sh_setupui.cpp (the faithful FUN_18000cb6c widget-tree port + retranslateUi + the FUN_180014e7c
-# flag-word dispatch skeleton) + sl_exports.cpp (the 9 sl_* thin stubs). The shared ABI header (../common/snaphak_iface.h) is
-# included (no .cpp from common is linked into the frontend -- the frontend only CONSUMES the interface;
-# the backend hosts the factory + the register/unregister/drain bodies).
+# Usage:  invoked by the repo-root build.ps1; or directly: pwsh -File src\ui\build.ps1 (backend not rebuilt)
 #
-# Needs Build Tools for Visual Studio 2022 (C++ workload) + Qt 5.9.9 MSVC2017 64-bit at $QtDir.
+# Needs: Build Tools for Visual Studio 2022 (C++ workload). Uses the system-installed WebView2 runtime
+# at RUN time (preinstalled on Windows 11; evergreen runtime on most Windows 10).
 param(
-    [string]$Out   = "snaphakui.dll",
-    [string]$QtDir = "C:\Qt\5.9.9\msvc2017_64"
+    [string]$Out = "snaphakui.dll"
 )
 $ErrorActionPreference = "Stop"
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$common = Join-Path (Split-Path -Parent $here) "common"
+$here   = Split-Path -Parent $MyInvocation.MyCommand.Path            # src\ui
+$repo   = Split-Path -Parent (Split-Path -Parent $here)             # repo root
+$common = Join-Path (Split-Path -Parent $here) "common"            # src\common
+$build  = Join-Path $repo "build"
+$objDir = Join-Path $build "obj\uiwv"
+$sdkDir = Join-Path $build "webview2sdk"
+New-Item -ItemType Directory -Force $objDir | Out-Null
 
-if (-not (Test-Path $QtDir)) { throw "Qt SDK not found at $QtDir (set -QtDir)." }
-$qtInc = Join-Path $QtDir "include"
-$qtLib = Join-Path $QtDir "lib"
-foreach ($m in @("Qt5Core.lib", "Qt5Gui.lib", "Qt5Widgets.lib")) {
-    if (-not (Test-Path (Join-Path $qtLib $m))) { throw "missing $m under $qtLib" }
-}
-
+# --- 1. MSVC toolchain --------------------------------------------------------------------------------
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path $vswhere)) {
-    throw "vswhere not found. Install Build Tools for Visual Studio 2022 (C++ workload)."
-}
+if (-not (Test-Path $vswhere)) { throw "vswhere not found. Install VS 2022 Build Tools (C++ workload)." }
 $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $vs) { throw "VC Tools (x86/x64) not found in any VS install." }
 $vcvars = "$vs\VC\Auxiliary\Build\vcvars64.bat"
 if (-not (Test-Path $vcvars)) { throw "vcvars64.bat not found at $vcvars" }
 
-$Sources = @("snaphak_ui_init.cpp", "sh_setupui.cpp", "sl_exports.cpp", "sh_tabs.cpp",
-             "sh_timeline.cpp")   # SnapStack is backend-hosted (src/backend/snapstack.c) -- no Qt-side copy
-$srcArgs = ($Sources | ForEach-Object { '"' + $_.Trim() + '"' }) -join " "
-$implib  = $Out -replace '\.dll$', '.lib'   # import lib + .exp -> build\obj\ui (build\ root stays shippable DLLs only)
+# --- 2. WebView2 SDK (NuGet) --------------------------------------------------------------------------
+# Pinned (not "latest") -- api.nuget.org's index.json lists prerelease builds interleaved with stable
+# ones, so $idx.versions[-1] (the literal last entry) can silently land a "-prerelease" SDK. Bump this
+# deliberately when picking up a new stable release.
+$wvPinnedVersion = "1.0.4078.44"
+$wvInclude = Join-Path $sdkDir "build\native\include"
+$wvLib     = Join-Path $sdkDir "build\native\x64\WebView2LoaderStatic.lib"
+if (-not (Test-Path (Join-Path $wvInclude "WebView2.h"))) {
+    Write-Host "Fetching Microsoft.Web.WebView2 SDK $wvPinnedVersion from NuGet..."
+    $ver = $wvPinnedVersion
+    $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$ver/microsoft.web.webview2.$ver.nupkg"
+    $zip = Join-Path $build "webview2.$ver.zip"
+    Invoke-WebRequest -Uri $url -OutFile $zip
+    if (Test-Path $sdkDir) { Remove-Item -Recurse -Force $sdkDir }
+    Expand-Archive -Path $zip -DestinationPath $sdkDir -Force
+    Remove-Item $zip -Force
+}
+if (-not (Test-Path (Join-Path $wvInclude "WebView2.h"))) { throw "WebView2.h missing after SDK fetch ($wvInclude)" }
+if (-not (Test-Path $wvLib)) { throw "WebView2LoaderStatic.lib missing after SDK fetch ($wvLib)" }
+Write-Host "WebView2 SDK ready at $sdkDir"
 
-# Qt include dirs: the top-level include + the per-module dirs (Qt headers #include <QApplication> resolve
-# under QtWidgets/). The common dir carries the shared interface ABI header.
+# --- 3. embed the HTML --------------------------------------------------------------------------------
+# Wrap mockup.html verbatim in a C++ raw string literal so the DLL carries the UI with no shipped file.
+$htmlPath = Join-Path $here "webview\mockup.html"
+if (-not (Test-Path $htmlPath)) { throw "mockup.html not found at $htmlPath" }
+$html = Get-Content -Raw -Path $htmlPath
+# MSVC caps a single string literal at ~16 KB (error C2026). Split into <16 KB chunks emitted as
+# ADJACENT raw string literals -- the compiler concatenates them into one array. Raw literals need no
+# escaping; any byte is safe except the exact ")SNAPHAK" delimiter, which the HTML never contains.
+$chunkSize = 8000
+$sb = New-Object System.Text.StringBuilder
+[void]$sb.AppendLine("/* generated from webview/mockup.html by src/ui/build.ps1 -- do not edit */")
+[void]$sb.AppendLine("static const char kMockupHtml[] =")
+for ($i = 0; $i -lt $html.Length; $i += $chunkSize) {
+    $len = [Math]::Min($chunkSize, $html.Length - $i)
+    [void]$sb.AppendLine('R"SNAPHAK(' + $html.Substring($i, $len) + ')SNAPHAK"')
+}
+[void]$sb.AppendLine(";")
+$hdrPath = Join-Path $objDir "mockup_html.h"
+Set-Content -Path $hdrPath -Value $sb.ToString() -Encoding ascii -NoNewline
+Write-Host "generated $hdrPath ($([Math]::Round(($html.Length/1KB),1)) KB of HTML)"
+
+# --- 4. compile -------------------------------------------------------------------------------------
+# /MD (dynamic CRT: the WebView2 static loader + the process's existing MSVCP140/VCRUNTIME140 expect it),
+# /EHsc /std:c++17. Includes: WebView2 headers, the generated header dir, the shared iface ABI dir.
+# Sources: the WebView2 host + the unchanged sl_* export stubs. Links the static WebView2 loader + the
+# Win32 libs its COM/shell calls need. NO Qt. /DEF pins the OG export set (snaphak_ui_init @10 + sl_*).
 $incArgs = @(
-    "/I`"$qtInc`"",
-    "/I`"$qtInc\QtCore`"",
-    "/I`"$qtInc\QtGui`"",
-    "/I`"$qtInc\QtWidgets`"",
+    "/I`"$wvInclude`"",
+    "/I`"$objDir`"",
     "/I`"$common`""
 ) -join " "
-
-# Qt link libs (Core/Gui/Widgets). QtSvg is NOT linked (ships only as a runtime image-format plugin).
-# user32.lib: MessageBoxA -- the `bsb` faithful OG leftover calls it on the re-resolve
-# mismatch path (Qt/CRT do not pull user32 in for a console-driven op).
+$srcArgs = "webview\snaphak_ui_webview.cpp sl_exports.cpp"
 $libArgs = @(
-    "`"$qtLib\Qt5Core.lib`"",
-    "`"$qtLib\Qt5Gui.lib`"",
-    "`"$qtLib\Qt5Widgets.lib`"",
-    "user32.lib"
+    "`"$wvLib`"",
+    "ole32.lib", "oleaut32.lib", "shell32.lib", "shlwapi.lib",
+    "version.lib", "advapi32.lib", "user32.lib", "gdi32.lib"
 ) -join " "
+$implib = $Out -replace '\.dll$', '.lib'
 
-# C++ Qt build: /LD shared, /EHsc C++ EH, /std:c++17, /MD (match Qt's dynamic CRT), Qt + common
-# includes, the Qt libs, /Fe:snaphakui.dll, /DEF for the OG export ordinal + the sl_* name set.
-# Output -> open-snaphak\build\qt\ (its OWN subfolder, distinct from build\webview\ -- both the Qt and
-# webview frontends build a file literally named snaphakui.dll; without separate folders, building one
-# after the other would silently overwrite the other in build\. The backend, XINPUT1_3.dll, has no
-# per-frontend variant and stays directly in build\.). Paths RELATIVE to cwd=$here (..\..\ = repo root)
-# so the quoted-trailing-backslash cmd footgun is avoided; /DEF:snaphakui.def stays cwd-relative.
-$cl  = "cl /nologo /LD /O2 /W3 /EHsc /std:c++17 /MD /DWIN32 /D_WINDOWS /Fo..\..\build\obj\ui\ $incArgs $srcArgs " +
-       "/Fe:..\..\build\qt\$Out /link /DEF:snaphakui.def /IMPLIB:..\..\build\obj\ui\$implib $libArgs"
+# Output -> build\webview\ (its OWN subfolder, distinct from build\qt\ -- both frontends build a file
+# literally named snaphakui.dll; without separate folders, building one after the other would silently
+# overwrite the other in build\. The backend, XINPUT1_3.dll, has no per-frontend variant and stays
+# directly in build\.)
+New-Item -ItemType Directory -Force (Join-Path $build "webview") | Out-Null
+$cl  = "cl /nologo /LD /O2 /W3 /EHsc /std:c++17 /MD /DWIN32 /D_WINDOWS /Fo..\..\build\obj\uiwv\ " +
+       "$incArgs $srcArgs /Fe:..\..\build\webview\$Out " +
+       "/link /DEF:snaphakui.def /IMPLIB:..\..\build\obj\uiwv\$implib $libArgs"
 $cmd = "cd /d `"$here`" && `"$vcvars`" && $cl"
-# vcvars64.bat emits a spurious "'vswhere.exe' is not recognized" line on stderr (it probes a bare-PATH
-# vswhere before falling back); under $ErrorActionPreference='Stop' a native-command stderr line can trip
-# PS 5.1 as a terminating error even though cl succeeds. Route the whole cmd's stdout+stderr to a log and
-# gate ONLY on the real signal -- $LASTEXITCODE from `cmd /c`.
-$outDir = Join-Path (Split-Path -Parent (Split-Path -Parent $here)) "build"   # open-snaphak\build (out of src\)
-New-Item -ItemType Directory -Force (Join-Path $outDir "obj\ui") | Out-Null
-New-Item -ItemType Directory -Force (Join-Path $outDir "qt") | Out-Null
-$buildLog = Join-Path $outDir "build.log"
+
+$buildLog = Join-Path $build "build-ui.log"
 cmd /c "$cmd > `"$buildLog`" 2>&1"
 $clExit = $LASTEXITCODE
 Get-Content $buildLog | Write-Host
 if ($clExit -ne 0) { throw "cl failed (exit $clExit) -- see $buildLog" }
-Write-Host "built $(Join-Path $outDir "qt\$Out")"
+Write-Host "built $(Join-Path $build "webview\$Out") (WebView2)"

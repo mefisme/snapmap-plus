@@ -2,7 +2,7 @@
 
 open-snaphak is an open-source, clean-room reimplementation of **SnapHak** — Chrispy's closed-source modding
 tool for DOOM 2016's in-game **SnapMap** level editor. It builds to two drop-in Windows DLLs (a backend
-`XINPUT1_3.dll` and a Qt frontend `snaphakui.dll`) plus a Go installer (`snaphak.exe`). This guide takes you
+`XINPUT1_3.dll` and a WebView2/HTML frontend `snaphakui.dll`) plus a Go installer (`snaphak.exe`). This guide takes you
 from a **fresh Windows machine** all the way to a built, tested change and an open pull request.
 
 If anything here is wrong, missing, or unclear, fixing it is itself a welcome PR.
@@ -32,7 +32,8 @@ If anything here is wrong, missing, or unclear, fixing it is itself a welcome PR
   any PR that adds one**. The source is the only deliverable; CI builds the binaries.
 - **Pure ASCII source.** The PowerShell build reads BOM-less UTF-8 as Windows-1252, so keep `.c` / `.h` /
   `.cpp` / `.ps1` files ASCII-only (no smart quotes, em dashes, or accented characters in source).
-- **Match the surrounding code.** The backend is plain C; the UI is Qt/C++; the installer is Go (run `gofmt`).
+- **Match the surrounding code.** The backend is plain C; the frontend is C++ (the WebView2 host) + HTML/CSS/JS
+  in `mockup.html`; the installer is Go (run `gofmt`).
 - **Supply-chain awareness.** Because the tool loads into DOOM, releases are a supply-chain target. PR CI runs
   in a secretless sandbox (it can't publish or touch signing keys), a maintainer reviews every diff, and a scan
   flags any new network / process-spawn / persistence code — the tool has no legitimate reason for any of that.
@@ -45,24 +46,17 @@ You need 64-bit **Windows 10 or 11** and the tools below. Install them in this o
 |---|---|---|---|
 | 1 | **Git** | any recent | <https://git-scm.com/download/win> |
 | 2 | **Visual Studio 2022 Build Tools** | 2022 (v17) | <https://aka.ms/vs/17/release/vs_BuildTools.exe> |
-| 3 | **Qt** | **5.9.9**, MSVC 2017 64-bit | <https://download.qt.io/archive/qt/5.9/5.9.9/> |
-| 4 | **Go** | 1.21+ | <https://go.dev/dl/> |
-| 5 | **DOOM 2016** | Steam (app 379720) | required to actually run/test the mod |
+| 3 | **Go** | 1.21+ | <https://go.dev/dl/> |
+| 4 | **DOOM 2016** | Steam (app 379720) | required to actually run/test the mod |
+
+The frontend renders in the Microsoft Edge **WebView2 runtime**, preinstalled on Windows 11 and on most
+Windows 10 (via Edge) — nothing to install to build or run. (Its SDK headers + static loader are fetched
+from NuGet at build time; there is no Qt or other UI toolkit to install.)
 
 **Visual Studio 2022 Build Tools.** Run the installer and tick the **"Desktop development with C++"**
 workload. That installs the MSVC x64 compiler (`cl.exe`) and the Windows 10/11 SDK the build needs. The build
 locates the toolchain with `vswhere`, requiring the `Microsoft.VisualStudio.Component.VC.Tools.x86.x64`
 component — included in that workload. You do **not** need the full Visual Studio IDE; the Build Tools suffice.
-
-**Qt 5.9.9 — the trickiest step.** Version 5.9.9 is end-of-life and is **not** offered by the modern Qt online
-installer, so get it from the offline archive:
-
-1. Download **`qt-opensource-windows-x86-5.9.9.exe`** from
-   <https://download.qt.io/archive/qt/5.9/5.9.9/>.
-2. Run it (a free Qt account may be required). In the component tree, tick **"MSVC 2017 64-bit"** under
-   Qt 5.9.9.
-3. Install to the default `C:\Qt`. The build expects **`C:\Qt\5.9.9\msvc2017_64`**; if you install elsewhere,
-   pass `-QtDir <path>` to `build-qt.ps1` / `package-qt.ps1`.
 
 **Go** is only needed to build the installer (`snaphak.exe`); you can skip it if you only touch the DLLs.
 
@@ -83,30 +77,27 @@ cd open-snaphak
 ## 4. Build the DLLs
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File build-qt.ps1
-# If Qt is somewhere other than C:\Qt\5.9.9\msvc2017_64:
-powershell -NoProfile -ExecutionPolicy Bypass -File build-qt.ps1 -QtDir D:\Qt\5.9.9\msvc2017_64
+powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
 ```
 
 This compiles both DLLs into **`build/`**: the backend `XINPUT1_3.dll` and the frontend
-`build/qt/snaphakui.dll`. `build/` is gitignored. (`build-qt.ps1` first builds the backend, then the
-Qt frontend, so the two never drift out of ABI sync -- see [`architecture.md`](architecture.md).)
+`build/webview/snaphakui.dll` (the WebView2 SDK is auto-fetched from NuGet on the first build). `build/`
+is gitignored. (`build.ps1` first builds the backend, then the frontend, so the two never drift out of ABI
+sync -- see [`architecture.md`](architecture.md).)
 
-Three top-level build scripts exist, one per concern: `build-backend.ps1` (backend only),
-`build-qt.ps1` (backend + the faithful Qt UI, used above and by CI), and `build-webview.ps1`
-(backend + the experimental Qt-free WebView2 UI -- see [`webview-ui.md`](webview-ui.md), not covered
-further in this guide).
+Two top-level build scripts exist: `build-backend.ps1` (backend only) and `build.ps1` (backend + frontend,
+used above and by CI). The frontend itself is described in [`webview-ui.md`](webview-ui.md).
 
 ## 5. Package the overlay
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File package-qt.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1
 ```
 
-This assembles the deployable **6-file overlay** into **`dist/`**: the two DLLs plus the Qt 5.9.9 runtime
-(`Qt5Core` / `Qt5Gui` / `Qt5Widgets` + the `qwindows` platform plugin), laid out exactly as it drops into a
-DOOM install, alongside a `MANIFEST.sha256`. `dist/` is gitignored. (Pass `-QtDir` here too if your Qt is in a
-non-default location.) See [`docs/packaging.md`](packaging.md) for the full file list.
+This assembles the deployable **2-file overlay** into **`dist/`**: the two clone DLLs (no Qt runtime — the
+frontend uses the system-installed WebView2 runtime), laid out exactly as they drop into a DOOM install,
+alongside a `MANIFEST.sha256`. `dist/` is gitignored. See [`docs/packaging.md`](packaging.md) for the full
+file list.
 
 ## 6. Deploy and test in DOOM
 
@@ -168,24 +159,20 @@ CI runs the self-contained C tests and the installer tests on every PR; the DOOM
 
 1. **Branch:** `git switch -c fix/steam-path-detection` (or `feature/<thing>`).
 2. **Change** code under `src/` (or `installer/`). Keep each PR focused on one thing.
-3. **Build + package + test in DOOM:** `build-qt.ps1` → `package-qt.ps1` → `snaphak.exe install --local dist`.
-   **If your change touches `src/backend/`, `src/common/snaphak_iface.h`, or `src/ui/webview/`**, ALSO build
-   + test the experimental webview frontend (`build-webview.ps1` → `package-webview.ps1` → install
-   `--local`) before pushing. CI will catch a break here too (see step 8), but a local round-trip is much
-   faster than waiting on CI, and lets you actually see it working in DOOM rather than just "the build
-   didn't fail." See [`architecture.md`](architecture.md)'s note on the vtable's extension slots for why a
-   backend/frontend version mismatch is a real failure mode, not a theoretical one.
+3. **Build + package + test in DOOM:** `build.ps1` → `package.ps1` → `snaphak.exe install --local dist`.
+   A local round-trip is much faster than waiting on CI, and lets you actually see it working in DOOM rather
+   than just "the build didn't fail." See [`architecture.md`](architecture.md)'s note on the vtable's
+   extension slots for why a backend/frontend version mismatch is a real failure mode, not a theoretical one.
 4. **Run the tests** (section 7) — both the Go and C suites.
 5. **Update the docs** your change affects (section 9).
 6. **Commit** with a clear, imperative message that names the area, e.g.
    `installer: fix Steam library path detection` or `backend: add sh_listwires command`.
 7. **Push** to your fork and open a **pull request against `main`**.
-8. The **CI gate** runs automatically, as three parallel jobs: a security scan (no-new-binaries ·
-   capability-surface scan · gitleaks); the Qt path (`build-qt.ps1` / `package-qt.ps1`, a bundle-layout guard,
-   XInput ordinal parity, the C unit tests, and the installer's `gofmt` / `vet` / `test`); and the webview
-   path (`build-webview.ps1` / `package-webview.ps1`, its own bundle guard that also asserts the overlay
-   stayed genuinely Qt-free, and the same ordinal-parity check). It runs in a **secretless** sandbox — fork
-   PRs get a read-only token and zero repo secrets.
+8. The **CI gate** runs automatically, as two parallel jobs: a security scan (no-new-binaries ·
+   capability-surface scan · gitleaks); and the build (`build.ps1` / `package.ps1`, a bundle guard that also
+   asserts the overlay stayed Qt-free, XInput ordinal parity, the C unit tests, and the installer's
+   `gofmt` / `vet` / `test`). It runs in a **secretless** sandbox — fork PRs get a read-only token and zero
+   repo secrets.
 9. A **maintainer reviews** and merges (changes under `.github/`, `*.ps1`, and `installer/` are
    CODEOWNERS-gated). Releases are cut from reviewed, tagged commits — see the README's
    ["Versioning & releases"](../README.md#versioning--releases).
@@ -201,7 +188,7 @@ behavior change with stale docs will be sent back. Use this map:
 | the object model, the think-loop, the interface vtable, or the backend↔frontend boundary | [`docs/architecture.md`](architecture.md) |
 | a deliberately-reproduced original quirk, or a sanctioned divergence | [`docs/fidelity.md`](fidelity.md) |
 | a correctness bugfix in the shared `src/backend/` engine-call layer (not a fidelity divergence -- our own code was wrong) | [`docs/backend-changes.md`](backend-changes.md) |
-| the shipped file set / the Qt runtime / what's deliberately dropped (`package-qt.ps1`) | [`docs/packaging.md`](packaging.md) |
+| the shipped file set / what's deliberately dropped (`package.ps1`) | [`docs/packaging.md`](packaging.md) |
 | the install / update / uninstall flow, its flags, or release channels (`installer/`) | [`installer/README.md`](../installer/README.md) and, if user-facing, the top-level [`README.md`](../README.md) |
 | the build, test, or contribution process | this file (`docs/contributing.md`) |
 
@@ -211,8 +198,8 @@ docs were considered.
 ## 10. Generated headers — don't hand-edit
 
 A few committed headers are **generated data tables**, not hand-authored source: `src/ui/sh_*.h` (entity
-descriptions, the event catalog/docs, asset lists, the inherit/class universe) and
-`src/backend/class_universe.h`. They're checked in so the repo builds standalone — treat them as **vendored**.
+descriptions, the event catalog/docs, asset lists) and `src/backend/class_universe.h`. They're checked in so
+the repo builds standalone — treat them as **vendored**.
 Don't hand-edit them in a PR; open an issue describing the change you need instead.
 
 ## 11. Reporting security issues
@@ -226,14 +213,14 @@ release. **Do not open a public issue for a security problem.** Use GitHub's **p
 | Path | What |
 |---|---|
 | `src/backend/` | the backend DLL (`XINPUT1_3.dll`): the hook layer, console commands, cvars, cvar-unlock, the resident fault-shield |
-| `src/ui/` | the frontend DLL (`snaphakui.dll`): the Qt "SnapHak Studio" window |
+| `src/ui/` | the frontend DLL (`snaphakui.dll`): the WebView2 "SnapHak Studio" window -- `webview/` holds the host (`snaphak_ui_webview.cpp`) + the UI (`mockup.html`) |
 | `src/fault_shield/` | the recover-in-place vectored-exception fault shield (compiled into the backend) |
 | `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
 | `installer/` | `snaphak.exe` — the Go install / update / uninstall CLI |
 | `tests/` | the C unit tests + `run-tests.ps1` |
 | `docs/` | architecture · fidelity · capabilities · packaging · this guide |
-| `build-backend.ps1` / `build-qt.ps1` / `build-webview.ps1` | compile the DLLs → `build/` (backend only · backend+Qt · backend+webview) |
-| `package-qt.ps1` / `package-webview.ps1` | assemble the overlay → `dist/` (Qt, with its runtime bundled · webview, no Qt) |
+| `build-backend.ps1` / `build.ps1` | compile the DLLs → `build/` (backend only · backend + frontend) |
+| `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs, no Qt runtime) |
 | `.github/workflows/` | `ci.yml` (the PR gate) · `release.yml` (tag-triggered release) |
 | `LICENSE` | MIT |
 
@@ -242,9 +229,9 @@ release. **Do not open a public issue for a security problem.** Use GitHub's **p
 - **SnapMap** — DOOM 2016's in-game level editor. **SnapHak** extends it.
 - **The original SnapHak / "OG"** — Chrispy's closed-source tool that this project reimplements clean-room.
   **"The clone"** — this project's reimplementation.
-- **The overlay** — the six files that deploy into a DOOM install (the two DLLs + the Qt runtime).
+- **The overlay** — the two files that deploy into a DOOM install (the backend + frontend DLLs).
 - **Backend / frontend** — the backend `XINPUT1_3.dll` (the engine-side hook layer) and the frontend
-  `snaphakui.dll` (the Qt UI); they talk over the interface ABI in `src/common/`.
+  `snaphakui.dll` (the WebView2/HTML UI); they talk over the interface ABI in `src/common/`.
 - **`XINPUT1_3.dll` / ordinals** — the backend ships as an XInput proxy DLL DOOM already loads. It must export
   `XInputGetState` / `XInputSetState` at ordinals **2 / 3** (DOOM imports them *by ordinal*) and forwards every
   XInput call through to the real `System32` DLL, so the controller keeps working.

@@ -2,9 +2,8 @@
 # src\backend\build.ps1 (which works fine standalone -- this exists purely so all three top-level build
 # scripts are peers at the repo root and equally discoverable). Pure ASCII.
 #
-# One of three top-level, parallel build scripts -- build-backend.ps1 (this one), build-qt.ps1 (backend +
-# Qt frontend), build-webview.ps1 (backend + the experimental webview frontend). Forwards any extra args
-# (e.g. -Diag) straight through to src\backend\build.ps1.
+# One of two top-level build scripts -- build-backend.ps1 (this one) and build.ps1 (backend + frontend).
+# Forwards any extra args (e.g. -Diag) straight through to src\backend\build.ps1.
 param(
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest

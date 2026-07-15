@@ -72,14 +72,14 @@ The original's `bsb` (bulk-set-bool) handler had a leftover debug `MessageBoxA("
 its re-resolve-mismatch path — a development artifact that shipped. A re-resolve mismatch *is* a real
 signal (a property/value that didn't round-trip), so the clone keeps the signal but surfaces it via a
 **clean non-modal toast** ("bsb: some entities skipped …") instead of an intrusive debug box
-(`src/ui/snapstack.cpp`). *(Some nearby code comments still describe the faithful reproduction of the original —
+(`src/backend/snapstack.c`). *(Some nearby code comments still describe the faithful reproduction of the original —
 the behavior is the fixed one.)*
 
 ### `filtcls` reports the correct field
 The original's `sh filtcls` (filter the stack by **classname**) reused the `filtinh` toast string and
 mislabeled its output `"… had inherit %s"`. The clone **corrects the label** — `filtcls` reports
 `"had class %s"` and `filtinh` reports `"had inherit %s"` — so the toast names the field actually
-filtered (`src/ui/snapstack.cpp`).
+filtered (`src/backend/snapstack.c`).
 
 ## The one sanctioned divergence — the fault-shield
 
