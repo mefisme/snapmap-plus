@@ -101,12 +101,22 @@ entry at the bottom is the original POC buildout, before this doc tracked dates 
   while prefabs live only on this machine). The tag map rides the `prefabs` list message, and sidecar
   bytes are re-escaped fresh rather than spliced raw -- a hand-edited/malformed sidecar can only lose its
   own tags, never invalidate the whole message (the missing-quote lesson from 2026-07-07).
+- **IDE-style Tab in the Decl Text editor** (both layouts): Tab was falling through to the browser's
+  default focus-move (it highlighted the next control). Now, with the completion popup closed, Tab
+  inserts a real `\t` (decl text is tab-indented), a multi-line selection indents the whole block, and
+  Shift+Tab outdents (one leading tab or up to 4 leading spaces). Edits go through
+  `document.execCommand('insertText')` so they stay on the textarea's native undo stack and fire the
+  normal `input` plumbing. With the popup open, Tab still accepts the completion, as before.
 - **Decl Text editor line numbers**, in both the default and focus-mode layouts: a third gutter layer in
   the `.code-editor` stack with the same font metrics as the `pre`/`textarea`, so its rows align 1:1.
   The gutter has no scrollbar of its own -- `refreshDeclScroll()` translates the inner column by
   `-scrollTop` (scroll stays cheap; the line-number column is rebuilt only when the line COUNT changes).
   The gutter widens as the count gains digits, and `caretXY()` (the autocomplete-popup anchor) accounts
   for the shifted text origin.
+- **Prefab empty state re-centered.** `#pcEmpty` carries the same flex-centering `.placeholder` class as
+  the Entities tab's empty state, but every code path that re-showed it set an inline `display:block`,
+  overriding the class and dropping the vertical centering after the first hide/show cycle. The show
+  sites now restore `flex`.
 - **Multi-select placeholder layout fix** (user-reported, from a screenshot): `#selInfo` is a flex
   CENTERING container, so the placeholder's text + `<br>` + span were being laid out as separate ROW
   flex items sitting side-by-side. `showPlaceholder()` now wraps its content in one block so multi-line

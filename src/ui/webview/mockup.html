@@ -1391,6 +1391,37 @@
   taEl.addEventListener('blur', function(){ setTimeout(acClose, 120); });
   taEl.addEventListener('keydown', function(e){
     if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); acOpen(true); return; }
+    // IDE-style Tab (both the default and focus-mode layouts): when the completion popup is NOT open,
+    // Tab indents instead of moving keyboard focus to the next control. Decl text is tab-indented, so a
+    // real \t is inserted; a selection spanning multiple lines indents the whole block; Shift+Tab
+    // outdents (one leading tab, or up to 4 leading spaces). Edits go through
+    // document.execCommand('insertText') -- unlike setRangeText, that keeps every edit on the textarea's
+    // NATIVE undo stack (Ctrl+Z still works), and it fires the normal 'input' event so the highlight/
+    // gutter/dirty plumbing runs unchanged. (When the popup IS open, Tab accepts the completion below.)
+    if (e.key === 'Tab' && !acItems.length) {
+      e.preventDefault();
+      var v = this.value, s = this.selectionStart, en = this.selectionEnd;
+      var hasNl = v.slice(s, en).indexOf('\n') !== -1;
+      if (!e.shiftKey && !hasNl) {
+        document.execCommand('insertText', false, '\t');
+      } else {
+        // block indent/outdent: expand to whole lines, rewrite the block, keep it selected
+        var ls = v.lastIndexOf('\n', s - 1) + 1;
+        var le = v.indexOf('\n', en === s ? en : en - 1); if (le === -1) le = v.length;
+        var block = v.slice(ls, le);
+        var lines = block.split('\n');
+        var out = e.shiftKey ? lines.map(function(l){ return l.replace(/^(\t| {1,4})/, ''); }).join('\n')
+                             : lines.map(function(l){ return '\t' + l; }).join('\n');
+        if (out !== block) {
+          this.setSelectionRange(ls, le);
+          document.execCommand('insertText', false, out);
+          this.setSelectionRange(ls, ls + out.length);
+        } else {
+          this.setSelectionRange(s, en);   // nothing to outdent -- restore the caret/selection untouched
+        }
+      }
+      return;
+    }
     if (!acItems.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); acActive = Math.min(acItems.length - 1, acActive + 1); acRender(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); acActive = Math.max(0, acActive - 1); acRender(); }
@@ -2624,7 +2655,9 @@
   // aren't stored anywhere yet (the prefab JSON has no metadata field) -- disabled until a sidecar file lands.
   function renderPrefabDetail(d) {
     var card = document.getElementById('prefabCard'), empty = document.getElementById('pcEmpty');
-    if (!d.ok) { card.style.display = 'none'; empty.style.display = 'block'; empty.textContent = 'Could not read "' + d.name + '".'; setPrefabButtons(false); metaBaseline = null; return; }
+    /* 'flex', not 'block' -- #pcEmpty's .placeholder class centers via flex, and an inline 'block'
+     * would override it (the empty state then sits top-left instead of centered like the Entities tab) */
+    if (!d.ok) { card.style.display = 'none'; empty.style.display = 'flex'; empty.textContent = 'Could not read "' + d.name + '".'; setPrefabButtons(false); metaBaseline = null; return; }
     empty.style.display = 'none'; card.style.display = 'flex';
     setPrefabButtons(true);
     document.getElementById('pcName').value = d.name;
@@ -3154,7 +3187,8 @@
     if (prefabTree) prefabTree.querySelectorAll('.pf-item.selected').forEach(function(s){ s.classList.remove('selected'); });
     var card = document.getElementById('prefabCard'), empty = document.getElementById('pcEmpty');
     if (card) card.style.display = 'none';
-    if (empty) { empty.style.display = 'block'; empty.textContent = 'Select a prefab to see its details.'; }
+    /* 'flex' (see renderPrefabDetail) -- keeps the empty state centered like the Entities tab's */
+    if (empty) { empty.style.display = 'flex'; empty.textContent = 'Select a prefab to see its details.'; }
     ['pcName', 'pcDesc', 'pcTags'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
     setPrefabButtons(false);
   }
