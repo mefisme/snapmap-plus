@@ -26,6 +26,8 @@ extern "C" {
 int sh_config_init(void);
 int sh_config_get_json(const char *key, char *out_json, int out_capacity,
                        unsigned int *out_flags);
+int sh_config_get_bool(const char *key, int *out_value,
+                       unsigned int *out_flags);
 int sh_config_set_json(const char *key, const char *value_json);
 int sh_config_get_string(const char *key, char *out, int out_capacity);
 void sh_config_bind_iface_slots(void);

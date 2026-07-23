@@ -78,7 +78,8 @@ stable release has been published yet, they fall back to the newest beta (and sa
 - Leaves `%LOCALAPPDATA%\snapmap-plus\config.json` entirely to the runtime. The backend creates it on the
   first Snapmap+ startup after install; install, update, uninstall, and reinstall never generate, parse,
   rewrite, or delete it. Deleting it yourself is the supported preference reset — the runtime recreates
-  defaults the next time it starts.
+  defaults (including user overrides enabled) the next time it starts. Configuration remains runtime-owned
+  and installer-preserved.
 - **`uninstall`** reverses *exactly* that record: removes the files it placed, restores the backups, and cleans
   the dirs it created **only if they're empty** — a pre-existing `platforms/` or other content is left intact. Your
   player data (`config.json`, overrides, prefabs, rawmaps) is **never** touched.

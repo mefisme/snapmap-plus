@@ -96,30 +96,42 @@ The backend is the sole owner of `%LOCALAPPDATA%\snapmap-plus\config.json`; the 
 generate, parse, or replace it. `sh_config_init` runs after the common per-user directories are available
 and creates this version-1 document when the file is absent:
 
+```text
+config init -> immutable user-overrides snapshot -> resource-hook install
+```
+
+The snapshot makes the user-file layer stable for that DOOM process; the setting is changed for a later
+launch, not as a live resource-loader switch.
+
 ```json
 {
   "schema_version": 1,
   "settings": {
     "theme": "light",
     "entities.show_hidden": false,
-    "entities.selection_mode": "off"
+    "entities.selection_mode": "off",
+    "overrides.user_enabled": true
   }
 }
 ```
 
 Deleting the file deliberately is therefore a clean reset: the next startup, or the next setting write
-in a running session, recreates it. The one descriptor table in `src/backend/config.c` declares each
-setting's key, JSON type, default, validator/normalizer, and backend/frontend read/write permissions. In
-addition to `theme`, the registry has the `entities.show_hidden` boolean and `entities.selection_mode`
-enum (`off`, `follow`, or `select_in_3d`); the schema version and generic backend↔frontend ABI are
-unchanged. Adding a setting means adding a descriptor and its behavior/tests; the wire contract remains
+in a running session, recreates it. Missing or deleted configuration restores `overrides.user_enabled` to
+enabled. Manual config edits are consumed at the next startup; a successful `sh_user_overrides 0` or
+`sh_user_overrides 1` write goes through the existing setter and so recreates a deleted file. The one descriptor
+table in `src/backend/config.c` declares each setting's key, JSON type, default, validator/normalizer, and
+backend/frontend read/write permissions. In addition to `theme`, the registry has the
+`entities.show_hidden` boolean, `entities.selection_mode` enum (`off`, `follow`, or `select_in_3d`), and
+`overrides.user_enabled` boolean (true by default); the schema version and generic backend↔frontend ABI
+are unchanged. Adding a setting means adding a descriptor and its behavior/tests; the wire contract remains
 generic.
 
 Values cross the matched-pair ABI as complete UTF-8 JSON fragments. `config_get_json` at `+0x2B0`
 supports a size query and reports status flags; `config_set_json` at `+0x2B8` validates the registered
 key/value and returns rejected, persisted, or session-only. The WebView host exposes those calls to the
 page as generic `configGet` / `configSet` messages carrying `valueJson`. This accommodates future
-booleans, numbers, strings, arrays, and objects without growing the ABI once per setting.
+booleans, numbers, strings, arrays, and objects without growing the ABI once per setting; the generic
+bridge already permits a future frontend control for user overrides, though none exists today.
 
 The parser accepts an optional UTF-8 BOM, caps the file at 64 KiB, rejects malformed UTF-8, malformed
 JSON, excessive nesting, and duplicate object keys, and requires the supported schema version. For a
@@ -137,5 +149,7 @@ paired temporary/rollback names; if a process stops in Windows' documented parti
 the next startup recognizes the pair and restores the prior file before applying missing-file reset
 semantics. Creation, read, write, flush, backup, replacement, or mutex failures leave the last good
 on-disk file intact where possible and switch the affected value to session-only memory with a visible
-warning. The two-DLL overlay and installer payload are unchanged; update/uninstall/reinstall preserve
-this runtime-owned file.
+warning. `overrides.user_enabled` is the exception to that general session-only behavior: its immutable
+launch snapshot has already been captured, so a failed `sh_user_overrides` write reports that it was not
+saved, leaves this launch unchanged, and establishes no next-launch change. The two-DLL overlay and
+installer payload are unchanged; update/uninstall/reinstall preserve this runtime-owned file.

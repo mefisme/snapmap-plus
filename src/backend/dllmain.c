@@ -36,6 +36,7 @@
 #include "wiring_cleandirect.h" /* sh_target_any wire-any: force the stock clean-direct connect branch (bind to any target ENTITY, no input radial) */
 #include "ui_bridge.h"
 #include "config.h"
+#include "user_overrides.h"
 #include "iface_engine.h"
 #include "apply_engine.h"
 #include "cvar_unlock.h"   /* merged-in cvar-unlock (former standalone dinput8) */
@@ -124,6 +125,7 @@ static DWORD WINAPI bootstrap_thread(LPVOID p)
      * (the reason an end-user couldn't see the "unknown entity" override served from overrides\). */
     ensure_user_dirs();
     sh_config_init(); /* nonfatal: the service retains defaults and status flags on failure */
+    sh_user_overrides_capture_launch_state();
 
     /* Poll the resolver until the SteamStub has decrypted .text (full DB resolves uniquely) or we time
      * out. sig_resolve_all returns the count of UNIQUE resolves; the bar is the whole DB. While .text is
@@ -257,9 +259,9 @@ static DWORD WINAPI bootstrap_thread(LPVOID p)
          * (SIG_OK_HOOKED) would corrupt the decode -- refuse on the hook-tolerant fallback. The shadow
          * is always-live once installed (no arm gate) and resolves THREE-LAYER: a user's
          * overrides/<name> file under %LOCALAPPDATA%\snapmap-plus\ -> our built-in default decls from memory
-         * (the "*Custom" tab set; never written to disk) -> the engine's packaged resource. The user
-         * layer is gated by the sh_user_overrides cvar (registered below; the loader's read is
-         * registration-aware so pre-flush opens see the default 1). See overrides.c. */
+         * (the "*Custom" tab set; never written to disk) -> the engine's packaged resource. The user-file
+         * layer is gated by the restart-only config snapshot captured above; built-in defaults and engine
+         * resources remain active regardless. See overrides.c. */
         void *res_ctor = NULL;
         int   ctor_clean = 0;
         for (size_t i = 0; i < db; i++) {

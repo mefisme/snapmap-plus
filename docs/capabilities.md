@@ -34,6 +34,7 @@ Registered with the engine command system; run from the DOOM console.
 | `cs_start_render_logging` | Set up the render-logging hook. |
 | `sh_disable_devmode` | Turn developer features off while keeping Bethesda.net connectivity. |
 | `sh_reenable_devmode` | Turn developer features back on. |
+| `sh_user_overrides [0\|1]` | On a successful save, persist whether player override files load on the next DOOM launch. `0` disables and `1` enables only the first resource layer; restart DOOM to apply either value. If saving fails, the console says so, this launch stays unchanged, and no next-launch change is guaranteed. With no argument, reports this launch's state and either the saved next-launch state or a volatile value not confirmed saved. Built-in defaults and DOOM's packaged resources remain available. |
 | `noClip` / `infiniteHealth` / `noPlayerDeath` / `noPlayerKill` / `noTarget` | The five player-cheat toggles for the local player: no-collision flight, infinite health, can't die, can't be killed, enemies ignore you. |
 
 ## Cvars
@@ -45,7 +46,6 @@ Console variables; defaults shown in parentheses.
 | `sh_copy_reslist_to_clipboard` (0) | Copy `sh_listres` output to the clipboard. |
 | `sh_pretty_on` (0) | Pretty-print saved rawmap JSON. |
 | `sh_show_rmcount` (0) | Draw the current number of active rendermodels. |
-| `sh_user_overrides` (1) | When 0, your override files under `%LOCALAPPDATA%\snapmap-plus\overrides\` are ignored (built-in defaults and the game's own resources serve instead) — the bisect lever for a broken override set. Affects resources opened after the change; for boot-time coverage, rename the `overrides` folder instead. |
 | `cs_dash_direction_multiplier` (1.0) | Scale dash direction. |
 | `cs_dash_ground_velocity_multiplier` (2.0) | Scale dash direction when on the ground. |
 | `cs_dash_time_seconds` (0.5) | Time period over which the dash is applied. |
@@ -118,14 +118,20 @@ editor (run `sh` in the console if it doesn't auto-open). Full detail: [`webview
 `%LOCALAPPDATA%\snapmap-plus\config.json` holds player preferences shared through the backend-owned
 settings service. The registered settings are `theme` (`"light"` by default, or `"dark"`),
 `entities.show_hidden` (off by default), and `entities.selection_mode` (off by default; `off`, `follow`,
-or `select_in_3d`). Show Hidden and the exclusive Entity selection direction survive restarts. The runtime
-creates the file when needed, so deleting it resets preferences and the next startup recreates the defaults.
+or `select_in_3d`), and `overrides.user_enabled` (on by default). Show Hidden and the exclusive Entity
+selection direction survive restarts. The runtime creates the file when needed, so deleting it resets
+preferences and the next startup recreates the defaults, including user overrides enabled. Manual config
+edits are consumed at the next startup; a successful `sh_user_overrides 0` or `sh_user_overrides 1` save
+uses the existing settings setter and recreates a deleted file. If the command cannot save, it reports the
+failure, leaves this launch unchanged, and does not establish a next-launch change. The generic bridge already
+permits a future frontend control for this setting.
 
 The schema and registry are intentionally extensible: registered values are type-checked and repaired
 individually, while unrecognized root and `settings` members survive normal rewrites. A damaged file is
-backed up and replaced with defaults; a file from a newer schema is left untouched; and an I/O failure
-keeps the choice for the current session while warning that it was not saved. The installer treats this
-file as player data and preserves it across update, uninstall, and reinstall.
+backed up and replaced with defaults; a file from a newer schema is left untouched; and an I/O failure keeps
+ordinary settings for the current session while warning that they were not saved. `sh_user_overrides` is
+different: its launch snapshot remains unchanged after a failed write. The installer treats this file as
+player data and preserves it across update, uninstall, and reinstall.
 
 ## Network use
 
@@ -148,7 +154,7 @@ Engine detours and resource-loader shadows the backend installs.
 |---|---|
 | Rawmap load | When rawmaps are on, load the map from `%LOCALAPPDATA%\snapmap-plus\rawmap.json` instead of the engine's own save. |
 | Rawmap save | On every editor save, mirror the serialized map JSON to `%LOCALAPPDATA%\snapmap-plus\rawmap.json`. |
-| Overrides file-shadow | Three-layer resource resolution: your file under `%LOCALAPPDATA%\snapmap-plus\overrides\` wins, then the built-in default decls (served from memory — the "*Custom" tab set; never written to your folder, so they update with each release and deleting your file restores the default), then the game's packaged resource. Install logs an audit of your active overrides and reclaims untouched default copies written by earlier releases. |
+| Overrides file-shadow | Three-layer resource resolution: your file under `%LOCALAPPDATA%\snapmap-plus\overrides\` wins when the player-file layer is enabled, then the built-in default decls (served from memory — the "*Custom" tab set; never written to your folder, so they update with each release and deleting your file restores the default), then the game's packaged resource. At startup, `overrides.user_enabled` is captured as an immutable choice for the player-file first layer; a successful `sh_user_overrides 0` or `sh_user_overrides 1` save changes the next launch and requires a DOOM restart. On a save failure, the console reports it and this launch remains unchanged. Built-ins and packaged resources remain available. Install logs an audit of your active overrides and reclaims untouched default copies written by earlier releases. |
 | Strids injector | Inject custom `#str_` strings from `%LOCALAPPDATA%\snapmap-plus\strings\strids.json` into the engine string table (your key wins over a built-in default for the same id). |
 | Fault handling | The clone replaces the original's two kill-detours (which terminate DOOM) with the recover-in-place fault-shield (see [`fidelity.md`](fidelity.md)). |
 | SuperScript table | Merge the parked `cs_*` SuperScript objects into the engine's eventDef enumerate/lookup/dispatch paths. |

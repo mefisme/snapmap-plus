@@ -18,7 +18,7 @@ runtime on most Windows 10), so there is no UI-toolkit runtime to bundle. The tw
 
 Persistent settings do not add a payload file. The backend creates
 `%LOCALAPPDATA%\snapmap-plus\config.json` at runtime when Snapmap+ first starts, so the deployable
-overlay remains the same two DLLs.
+overlay remains the same two DLLs. Configuration is runtime-owned and installer-preserved.
 
 ## Layout
 
@@ -52,9 +52,10 @@ auto under `--yes`). This never blocks the mod install — the DLLs deploy regar
 
 ## Per-user data is NOT shipped
 
-The bundle ships **no override decls** — those are per-user configuration. At runtime the tool reads your own
-from `%LOCALAPPDATA%\snapmap-plus\overrides\` (pure file-shadow data, e.g. to make extra editor entities placeable).
-Slot your own overrides there; the bundle provides none.
+The bundle ships **no player override files**. At runtime the tool reads your own from
+`%LOCALAPPDATA%\snapmap-plus\overrides\` (pure file-shadow data, e.g. to make extra editor entities placeable).
+Slot your own overrides there; Snapmap+'s small built-in defaults are instead served from memory by the backend
+DLL.
 
 The bundle also ships no `config.json`. That file is runtime-owned player data, separate from the
 installer's executable and `install.json` record. The installer never rewrites it and preserves it across

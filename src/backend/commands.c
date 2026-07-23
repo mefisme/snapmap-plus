@@ -19,6 +19,7 @@
 #include <string.h>
 #include "commands.h"
 #include "cvars.h"
+#include "user_overrides.h"
 #include "clipboard.h"
 #include "typeinfo.h"          /* sh_typeinfo_get_declmgr() -- shared declMgr accessor for [12] */
 #include "entlist_classes.h"
@@ -1315,6 +1316,8 @@ static const cmd_entry CMD_TABLE[] = {
     { "noPlayerDeath",       (void *)h_noplayerdeath,  "Toggle no-death (the player cannot die) for the local player." },
     { "noPlayerKill",        (void *)h_noplayerkill,   "Toggle no-kill (the player cannot be killed) for the local player." },
     { "noTarget",            (void *)h_notarget,       "Toggle notarget (enemies ignore the local player)." },
+    { "sh_user_overrides", (void *)h_sh_user_overrides,
+      "sh_user_overrides [0|1] -- persist whether player override files load on the next DOOM launch; restart required; built-in defaults stay enabled." },
     /* OUR OWN addition (no OG counterpart): one place that lists the whole Snapmap+ console surface. */
     { "sh_help",             (void *)h_sh_help,        "Lists every Snapmap+ console command and cvar with its description." },
 };

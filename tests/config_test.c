@@ -136,6 +136,7 @@ static void test_first_run_creates_defaults_and_getter_contract(void)
     char short_buffer[4] = { 'X', 'X', 'X', 0 };
     size_t disk_length = 0;
     unsigned int flags = 99;
+    int enabled = 0;
     int needed;
     const char *expected =
         "{\n"
@@ -143,7 +144,8 @@ static void test_first_run_creates_defaults_and_getter_contract(void)
         "  \"settings\": {\n"
         "    \"theme\": \"light\",\n"
         "    \"entities.show_hidden\": false,\n"
-        "    \"entities.selection_mode\": \"off\"\n"
+        "    \"entities.selection_mode\": \"off\",\n"
+        "    \"overrides.user_enabled\": true\n"
         "  }\n"
         "}\n";
 
@@ -174,6 +176,11 @@ static void test_first_run_creates_defaults_and_getter_contract(void)
     CHECK(sh_config_get_json("entities.selection_mode", value,
                              (int)sizeof(value), NULL) == 5);
     CHECK(strcmp(value, "\"off\"") == 0);
+    CHECK(sh_config_get_bool("overrides.user_enabled", &enabled, &flags) == 1);
+    CHECK(enabled == 1);
+    CHECK(flags == 0);
+    CHECK(sh_config_get_bool("theme", &enabled, NULL) == 0);
+    CHECK(sh_config_get_bool("missing", &enabled, NULL) == 0);
     CHECK(sh_config_get_json("missing", value, (int)sizeof(value), NULL) < 0);
 
     free(disk);
@@ -191,7 +198,8 @@ static void test_loads_existing_theme_without_rewriting(void)
         "{\"schema_version\":1,\"future_root\":{\"enabled\":true},"
         "\"settings\":{\"future_array\":[1,null],\"theme\":\"dark\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"}}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true}}";
 
     CHECK(make_temp_root(root, MAX_PATH));
     CHECK(make_config_dir(root, dir, path));
@@ -229,7 +237,8 @@ static void test_sets_valid_theme_and_preserves_unknown_values(void)
         "\"future_null\":null,"
         "\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\""
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true"
         "}"
         "}";
 
@@ -259,11 +268,24 @@ static void test_sets_valid_theme_and_preserves_unknown_values(void)
     CHECK(disk && strstr(disk, "\"future_null\": null") != NULL);
     if (disk) {
         const char *theme_position = strstr(disk, "\"theme\": \"dark\"");
+        const char *hidden_position = strstr(
+            disk, "\"entities.show_hidden\": false");
+        const char *mode_position = strstr(
+            disk, "\"entities.selection_mode\": \"off\"");
+        const char *enabled_position = strstr(
+            disk, "\"overrides.user_enabled\": true");
         const char *future_position = strstr(disk, "\"future_bool\": true");
         CHECK(theme_position != NULL);
+        CHECK(hidden_position != NULL);
+        CHECK(mode_position != NULL);
+        CHECK(enabled_position != NULL);
         CHECK(future_position != NULL);
-        if (theme_position && future_position)
-            CHECK(theme_position < future_position);
+        if (theme_position && hidden_position && mode_position &&
+            enabled_position && future_position)
+            CHECK(theme_position < hidden_position &&
+                  hidden_position < mode_position &&
+                  mode_position < enabled_position &&
+                  enabled_position < future_position);
     }
 
     free(disk);
@@ -280,12 +302,22 @@ static void test_repairs_missing_and_invalid_registered_values(void)
         "{\"schema_version\":1,\"settings\":{\"theme\":false,\"future\":42}}",
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":\"yes\","
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true,\"future\":42}}",
+        "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
+        "\"entities.show_hidden\":false,"
+        "\"entities.selection_mode\":\"both\","
+        "\"overrides.user_enabled\":true,\"future\":42}}",
+        "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
+        "\"entities.show_hidden\":false,"
         "\"entities.selection_mode\":\"off\",\"future\":42}}",
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"both\",\"future\":42}}"
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":\"yes\",\"future\":42}}"
     };
     size_t i;
+    int enabled = -1;
 
     for (i = 0; i < sizeof(documents) / sizeof(documents[0]); i++) {
         wchar_t root[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
@@ -309,12 +341,16 @@ static void test_repairs_missing_and_invalid_registered_values(void)
         CHECK(sh_config_get_json("entities.selection_mode", value,
                                  (int)sizeof(value), NULL) == 5);
         CHECK(strcmp(value, "\"off\"") == 0);
+        CHECK(sh_config_get_bool("overrides.user_enabled", &enabled, NULL) == 1);
+        CHECK(enabled == 1);
         CHECK((flags & SH_CONFIG_STATUS_REPAIRED) != 0);
         CHECK(read_file(path, &disk, NULL));
         CHECK(disk && strstr(disk, "\"theme\": \"light\"") != NULL);
         CHECK(disk && strstr(disk, "\"entities.show_hidden\": false") != NULL);
         CHECK(disk && strstr(disk,
               "\"entities.selection_mode\": \"off\"") != NULL);
+        CHECK(disk && strstr(disk,
+              "\"overrides.user_enabled\": true") != NULL);
         if (strstr(documents[i], "\"future\":true"))
             CHECK(disk && strstr(disk, "\"future\": true") != NULL);
         if (strstr(documents[i], "\"future\":42"))
@@ -336,6 +372,7 @@ static void test_entity_settings_validation_and_persistence(void)
         "\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
         "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true,"
         "\"future\":42}}";
 
     CHECK(make_temp_root(root, MAX_PATH));
@@ -370,19 +407,73 @@ static void test_entity_settings_validation_and_persistence(void)
     CHECK(disk && strstr(disk, "\"entities.show_hidden\": true") != NULL);
     CHECK(disk && strstr(disk,
           "\"entities.selection_mode\": \"select_in_3d\"") != NULL);
+    CHECK(disk && strstr(disk,
+          "\"overrides.user_enabled\": true") != NULL);
     CHECK(disk && strstr(disk, "\"future\": 42") != NULL);
     if (disk) {
         const char *theme = strstr(disk, "\"theme\": \"light\"");
         const char *hidden = strstr(disk, "\"entities.show_hidden\": true");
         const char *mode = strstr(
             disk, "\"entities.selection_mode\": \"select_in_3d\"");
+        const char *enabled = strstr(
+            disk, "\"overrides.user_enabled\": true");
         const char *future = strstr(disk, "\"future\": 42");
-        CHECK(theme && hidden && mode && future);
-        if (theme && hidden && mode && future)
-            CHECK(theme < hidden && hidden < mode && mode < future);
+        CHECK(theme && hidden && mode && enabled && future);
+        if (theme && hidden && mode && enabled && future)
+            CHECK(theme < hidden && hidden < mode && mode < enabled &&
+                  enabled < future);
     }
 
     free(disk);
+    sh_config_test_reset();
+    cleanup_temp_root(root);
+}
+
+static void test_user_overrides_setting_validation_and_persistence(void)
+{
+    wchar_t root[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
+    char value[16];
+    char *disk = NULL;
+    int enabled = -1;
+    const char existing[] =
+        "{\"schema_version\":1,\"settings\":{"
+        "\"theme\":\"light\","
+        "\"entities.show_hidden\":false,"
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true,"
+        "\"future\":42}}";
+
+    CHECK(make_temp_root(root, MAX_PATH));
+    CHECK(make_config_dir(root, dir, path));
+    CHECK(write_file(path, existing, sizeof(existing) - 1));
+    sh_config_test_reset();
+    sh_config_test_set_local_appdata(root);
+    CHECK(sh_config_init() == 1);
+
+    CHECK(sh_config_set_json("overrides.user_enabled", " \r\n false \t") ==
+          SH_CONFIG_SET_PERSISTED);
+    CHECK(sh_config_get_bool("overrides.user_enabled", &enabled, NULL) == 1);
+    CHECK(enabled == 0);
+    CHECK(sh_config_set_json("overrides.user_enabled", "\"false\"") ==
+          SH_CONFIG_SET_REJECTED);
+    CHECK(sh_config_set_json("overrides.user_enabled", "0") ==
+          SH_CONFIG_SET_REJECTED);
+    CHECK(sh_config_set_json("overrides.user_enabled", "1") ==
+          SH_CONFIG_SET_REJECTED);
+    CHECK(read_file(path, &disk, NULL));
+    CHECK(disk && strstr(disk, "\"overrides.user_enabled\": false") != NULL);
+    CHECK(disk && strstr(disk, "\"future\": 42") != NULL);
+    free(disk);
+
+    sh_config_test_reset();
+    sh_config_test_set_local_appdata(root);
+    CHECK(sh_config_init() == 1);
+    CHECK(sh_config_get_json("overrides.user_enabled", value,
+                             (int)sizeof(value), NULL) == 5);
+    CHECK(strcmp(value, "false") == 0);
+    CHECK(sh_config_get_bool("overrides.user_enabled", &enabled, NULL) == 1);
+    CHECK(enabled == 0);
+
     sh_config_test_reset();
     cleanup_temp_root(root);
 }
@@ -394,11 +485,13 @@ static void test_setter_rereads_external_edits_and_recreates_deleted_file(void)
     const char initial[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"},\"sentinel\":1}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true},\"sentinel\":1}";
     const char external[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\",\"external\":true},"
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true,\"external\":true},"
         "\"sentinel\":2}";
     const char *defaults =
         "{\n"
@@ -406,7 +499,8 @@ static void test_setter_rereads_external_edits_and_recreates_deleted_file(void)
         "  \"settings\": {\n"
         "    \"theme\": \"light\",\n"
         "    \"entities.show_hidden\": false,\n"
-        "    \"entities.selection_mode\": \"off\"\n"
+        "    \"entities.selection_mode\": \"off\",\n"
+        "    \"overrides.user_enabled\": true\n"
         "  }\n"
         "}\n";
 
@@ -442,6 +536,8 @@ static void test_setter_rereads_external_edits_and_recreates_deleted_file(void)
     CHECK(disk && strstr(disk, "\"entities.show_hidden\": false") != NULL);
     CHECK(disk && strstr(disk,
           "\"entities.selection_mode\": \"follow\"") != NULL);
+    CHECK(disk && strstr(disk,
+          "\"overrides.user_enabled\": true") != NULL);
 
     free(disk);
     sh_config_test_reset();
@@ -457,11 +553,13 @@ static void test_accepts_bom_and_canonicalizes_registered_strings(void)
     const char bom_document[] =
         "\xEF\xBB\xBF{\"schema_version\":1,\"settings\":{\"theme\":\"dark\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"}}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true}}";
     const char escaped_document[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"d\\u0061rk\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"}}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true}}";
 
     CHECK(make_temp_root(root, MAX_PATH));
     CHECK(make_config_dir(root, dir, path));
@@ -623,7 +721,8 @@ static void test_mutation_failures_keep_old_file_and_session_value(void)
     const char original[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"},\"keep\":true}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true},\"keep\":true}";
     size_t i;
 
     for (i = 0; i < sizeof(faults) / sizeof(faults[0]); i++) {
@@ -661,7 +760,8 @@ static void test_partial_existing_replace_keeps_old_file(void)
     const char original[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"},\"keep\":true}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true},\"keep\":true}";
     wchar_t root[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
     char value[16];
     char *disk = NULL;
@@ -696,7 +796,8 @@ static void test_partial_existing_replace_restores_moved_old_file(void)
     const char original[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"},\"keep\":true}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true},\"keep\":true}";
     wchar_t root[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
     char value[16];
     char *disk = NULL;
@@ -763,11 +864,13 @@ static void test_startup_restores_interrupted_existing_replace(void)
     const char original[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"dark\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"},\"keep\":true}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true},\"keep\":true}";
     const char replacement[] =
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
-        "\"entities.selection_mode\":\"off\"},\"keep\":true}";
+        "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true},\"keep\":true}";
     wchar_t root[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
     wchar_t rollback[MAX_PATH], temp[MAX_PATH];
     char value[16];
@@ -1070,6 +1173,7 @@ static void test_process_writers_are_serialized(void)
         "{\"schema_version\":1,\"settings\":{\"theme\":\"light\","
         "\"entities.show_hidden\":false,"
         "\"entities.selection_mode\":\"off\","
+        "\"overrides.user_enabled\":true,"
         "\"future\":{\"keep\":true}},\"sentinel\":\"preserve\"}";
 
     CHECK(make_temp_root(root, MAX_PATH));
@@ -1123,6 +1227,17 @@ static void test_shared_interface_uses_registered_config_service(void)
                   iface, "entities.show_hidden", value,
                   (int)sizeof(value), NULL) == 5);
         CHECK(strcmp(value, "false") == 0);
+        CHECK(iface->vtbl->config_get_json(
+                  iface, "overrides.user_enabled", value,
+                  (int)sizeof(value), NULL) == 4);
+        CHECK(strcmp(value, "true") == 0);
+        CHECK(iface->vtbl->config_set_json(
+                  iface, "overrides.user_enabled", "false") ==
+              SH_CONFIG_SET_PERSISTED);
+        CHECK(iface->vtbl->config_get_json(
+                  iface, "overrides.user_enabled", value,
+                  (int)sizeof(value), NULL) == 5);
+        CHECK(strcmp(value, "false") == 0);
         CHECK(iface->vtbl->config_set_json(
                   iface, "entities.selection_mode", "\"follow\"") ==
               SH_CONFIG_SET_PERSISTED);
@@ -1168,6 +1283,7 @@ int wmain(int argc, wchar_t **argv)
     test_loads_existing_theme_without_rewriting();
     test_sets_valid_theme_and_preserves_unknown_values();
     test_entity_settings_validation_and_persistence();
+    test_user_overrides_setting_validation_and_persistence();
     test_repairs_missing_and_invalid_registered_values();
     test_setter_rereads_external_edits_and_recreates_deleted_file();
     test_accepts_bom_and_canonicalizes_registered_strings();

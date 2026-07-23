@@ -34,11 +34,9 @@
  *   - THREE-LAYER resolution (OG has two): user disk file -> our BUILT-IN default decls served FROM
  *     MEMORY (overrides_baked.h; the "*Custom" tab set) -> the engine's packaged resource. Built-ins
  *     are never written to the user's folder (they update with each release; deleting a user file =
- *     reset to default). The user layer is toggleable via the sh_user_overrides cvar (per-session;
- *     takes effect only for resources not yet opened, so set it before entering SnapMap) or, for a
- *     restart-persistent switch, an `overrides.disabled` marker file next to the overrides folder;
- *     install runs a reclaim (deletes OUR untouched previously-written default copies) + an audit
- *     log pass that reports which mechanism is in force.
+ *     reset to default). Only the user layer is gated by an immutable, restart-only config snapshot;
+ *     built-ins and packaged resources remain active. Install runs a reclaim (deletes OUR untouched
+ *     previously-written default copies) + an audit log pass that reports whether user files are active.
  *
  * Clean-room: ported from our own RE (above). Zero OG SnapHak bytes.
  */

@@ -17,7 +17,7 @@
 # -- a detour on the engine idLangDict sort that appends strings/strids.json rows to the live string table);
 # overrides (the OVERRIDES FILE-SHADOW, port of OG FUN_18000b370 -- a VTABLE-SLOT swap of the engine
 # resource-provider's open-by-name method, serving %LOCALAPPDATA%\snapmap-plus\overrides\<name> from disk).
-# cvars (register the 9 cvars via the engine OUTER cvar register 0x1A04F00); commands (register the 22
+# cvars (register the 9 cvars via the engine OUTER cvar register 0x1A04F00); commands (register the 30
 # console commands via the engine AddCommand 0x1AA3630, cmdSystem global decoded from the CmdSystemLea
 # accessor; the trivial handlers wire sh_rawmaps_on/off to the shipped ops -- ports of
 # OG FUN_1800229b1's install spine). clipboard (CF_TEXT clipboard-set/get, port of OG FUN_1800053f0) feeds
@@ -47,7 +47,7 @@
 param(
     [string[]]$Sources = @("dllmain.c", "signatures.c", "hook.c", "smoke.c",
                            "rawmap.c", "palette_guard.c", "strids.c",
-                           "overrides.c", "cvars.c", "commands.c", "clipboard.c",
+                           "overrides.c", "user_overrides.c", "cvars.c", "commands.c", "clipboard.c",
                            "config.c", "config_json.c",
                            "entity.c", "typeinfo.c", "patch.c", "algo.c", "target_any.c", "wiring_cleandirect.c", "ui_bridge.c",
                            "iface_engine.c", "apply_engine.c", "../common/snapmap_plus_iface.c",

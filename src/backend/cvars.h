@@ -1,7 +1,6 @@
 /* cvars.h -- register the cvar table with the engine cvar system: the 9 OG cvars (clean-room
  * reimplementation of OG XINPUT1_3's static-init cvar push_back + spine flush; the OG's snaphak_*
- * name prefix renamed to our sh_*) + our own sh_user_overrides row (the user-override-layer kill
- * switch; no OG counterpart).
+ * name prefix renamed to our sh_*).
  *
  * OG SnapHak declares 9 cvars as static descriptors (from our cvar-descriptor RE) and, in the install
  * spine FUN_1800229b1, flushes them through the engine cvar register fn:
@@ -45,12 +44,10 @@
 int sh_cvars_install(void *cvar_register, const void *module_base);
 
 /* CVARS index constants (mirror the cvars.c CVARS[] table order) -- for consumers that read a
- * cvar's live value via sh_cvar_value_int / sh_cvar_value_int_reg. Rows 0..8 are the 9 OG cvars;
- * row 9 (sh_user_overrides) is our own addition (the user-override-layer kill switch). */
+ * cvar's live value via sh_cvar_value_int. Rows 0..8 are the 9 OG cvars. */
 #define B2_CVAR_SH_PRETTY_ON                 6
 #define B2_CVAR_SH_SHOW_RMCOUNT              7
 #define B2_CVAR_SH_COPY_RESLIST_TO_CLIPBOARD 8
-#define B2_CVAR_SH_USER_OVERRIDES            9
 
 /* Read the live INT/BOOL value of cvar `index` (one of the B2_CVAR_* constants) from OUR engine-
  * populated backing object. The engine stores valueInteger at idCVar+0x30 (DIRECT from the source-of-
@@ -59,12 +56,6 @@ int sh_cvars_install(void *cvar_register, const void *module_base);
  * NOTE (the build-specific-offset trap): +0x30 is DIRECT-from-source but the live read should be
  * spot-checked at FIRE (set the cvar to 1, confirm this returns 1). */
 int sh_cvar_value_int(int index, int def);
-
-/* Registration-aware variant: returns `def` until the engine has populated the backing object
- * (name@+0x40 matches), then the live value. Use for a cvar consulted on the boot path BEFORE the
- * cvar flush runs -- the plain read would report the zero-initialized slot (0) there, which is wrong
- * for a default-1 cvar (the overrides loader's sh_user_overrides gate is the canonical case). */
-int sh_cvar_value_int_reg(int index, int def);
 
 /* Read-only access to the cvar TABLE rows (name/default/description) -- for sh_help's listing.
  * Returns the row count; sh_cvar_table_row returns 1 and fills the pointers for a valid index. */

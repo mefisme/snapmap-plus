@@ -155,7 +155,8 @@ describing the change instead.
 
 The backend owns `%LOCALAPPDATA%\snapmap-plus\config.json`. It creates the file on the first Snapmap+
 startup after install (not during installation), and the Studio window's **Light / Dark**, **Show hidden**,
-and Entity selection-direction choices are registered settings:
+and Entity selection-direction choices are registered settings. The same registry owns whether player
+override files load:
 
 ```json
 {
@@ -163,28 +164,35 @@ and Entity selection-direction choices are registered settings:
   "settings": {
     "theme": "light",
     "entities.show_hidden": false,
-    "entities.selection_mode": "off"
+    "entities.selection_mode": "off",
+    "overrides.user_enabled": true
   }
 }
 ```
 
 `entities.selection_mode` accepts `off`, `follow`, and `select_in_3d`; the two Entity selection directions
-cannot be active together. These choices survive restarts, updates, uninstall, and reinstall. Deleting
-`config.json` is the supported "reset preferences" operation: the next startup recreates the light theme,
-Show Hidden off, and selection mode off defaults. The registry-backed format is designed for more settings
-without adding a new backend↔frontend ABI slot for each one; unknown values are preserved when a
-supported-schema file is rewritten. See [`docs/architecture.md`](docs/architecture.md) for validation,
-recovery, and I/O-failure behavior.
+cannot be active together. `overrides.user_enabled` defaults to `true`. These choices survive restarts,
+updates, uninstall, and reinstall. Deleting `config.json` is the supported "reset preferences" operation:
+the next startup recreates the light theme, Show Hidden off, selection mode off, and user overrides enabled
+defaults. Manual edits to the file are read at the next startup; a successful console write recreates a
+deleted file through the same settings service. The generic backend↔frontend settings bridge already permits a future
+frontend control for this setting. Unknown values are preserved when a supported-schema file is rewritten.
+See [`docs/architecture.md`](docs/architecture.md) for validation, recovery, and I/O-failure behavior.
 
 ## Overrides (runtime)
 
 At runtime the tool reads per-user **override decls** from `%LOCALAPPDATA%\snapmap-plus\overrides\` (a
 file-shadow over the engine's resource loader — e.g. to make extra editor entities placeable). Resolution is
-three-layer: **your file wins**, then the tool's few built-in default decls (the "*Custom" palette tab —
-served from memory, never written to your folder; delete your file at one of those names to get the
-default back), then the game's own packaged resource. A broken override set can be bisected by setting
-the `sh_user_overrides` cvar to 0 (ignores your files; built-ins still serve) or renaming the
-`overrides` folder. The backend log lists your active overrides at startup. Runtime logs go to
+three-layer: **your file wins while the player-file layer is enabled**, then the tool's few built-in default
+decls (the "*Custom" palette tab — served from memory, never written to your folder; delete your file at one
+of those names to get the default back), then the game's own packaged resource. A broken override set can be bisected by setting
+`sh_user_overrides 0` (or restored with `sh_user_overrides 1`). The command saves
+`overrides.user_enabled` only when persistence succeeds and requires a DOOM restart; it changes only the
+player-file first layer, so built-in defaults and the game's packaged resources remain available. If it
+cannot save, the console says so, this launch remains unchanged, and no next-launch change is guaranteed.
+Run `sh_user_overrides` with no argument to see this launch's state and either the saved next-launch state
+or a volatile value that is not confirmed saved. The backend log lists your active overrides at startup.
+Runtime logs go to
 `<DOOM>\snapmap-plus\logs\`. (Content from the original SnapHak's / older releases' `%USERPROFILE%\snaphak`
 folder is copied forward on install; a legacy root-level `snaphak_logs\` is folded in too.)
 

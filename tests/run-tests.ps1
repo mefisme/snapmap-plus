@@ -14,6 +14,8 @@
 #   config_json_test    -- bounded JSON grammar, duplicate keys, preservation + serialization
 #   iface_config_test   -- append-only config slot layout + dedicated binder isolation
 #   config_test         -- config lifecycle, validation, recovery, atomic faults + concurrency
+#   user_overrides_test -- immutable launch snapshot, persistence reporting + marker independence
+#   user_overrides_contract_test -- startup, command, cvar + loader source-wiring contract
 #   config_message_test -- bounded raw WebView config-message extraction
 #   theme_bootstrap_test -- pre-navigation dark-class injection (pure C++ helper)
 #   theme_contract_test -- native/preview theme bridge contract in the embedded HTML source
@@ -49,6 +51,8 @@ $tests = @(
     @{ name = "config_json_test";   src = 'config_json_test.c ..\src\backend\config_json.c';         arg = "" }
     @{ name = "iface_config_test";  src = 'iface_config_test.c ..\src\common\snapmap_plus_iface.c';   arg = "" }
     @{ name = "config_test";        src = 'config_test.c ..\src\backend\config.c ..\src\backend\config_json.c ..\src\common\snapmap_plus_iface.c'; defs = '/DSH_CONFIG_TESTING'; libs = 'shell32.lib ole32.lib'; arg = "" }
+    @{ name = "user_overrides_test"; src = 'user_overrides_test.c ..\src\backend\user_overrides.c ..\src\backend\config.c ..\src\backend\config_json.c ..\src\common\snapmap_plus_iface.c'; defs = '/DSH_CONFIG_TESTING /DSH_USER_OVERRIDES_TESTING'; libs = 'shell32.lib ole32.lib'; arg = "" }
+    @{ name = "user_overrides_contract_test"; src = 'user_overrides_contract_test.c'; arg = (Join-Path $here '..') }
     @{ name = "config_message_test"; src = 'config_message_test.cpp ..\src\ui\webview\config_message.cpp'; cxx = $true; arg = "" }
     @{ name = "theme_bootstrap_test"; src = 'theme_bootstrap_test.cpp ..\src\ui\webview\theme_bootstrap.cpp'; cxx = $true; arg = "" }
     @{ name = "theme_contract_test"; src = 'theme_contract_test.c'; arg = (Join-Path $here '..\src\ui\webview\mockup.html') }

@@ -10,8 +10,8 @@
  * A mode>=2 recursion guard goes straight to the original (OG's `param_5 >= 2` branch). For a BUILT-IN
  * name only, a user file that fails a minimal well-formedness check (brace/quote balance) is refused and
  * the built-in default serves instead (logged) -- a garbled file there would take out the "*Custom" tab.
- * The user layer can be disabled for bisecting a broken override set via the sh_user_overrides
- * cvar (or by renaming the overrides folder, which also covers opens before the cvar applies).
+ * The user layer can be disabled for bisecting a broken override set through the restart-only
+ * configuration snapshot; the built-in and engine layers remain active regardless.
  *
  * Install-time passes (both logged, both SEH-guarded):
  *   - RECLAIM: earlier releases WROTE the baked defaults to the user's folder if absent. A user file
@@ -33,7 +33,7 @@
 #pragma comment(lib, "shell32.lib")   /* SHGetFolderPathA */
 #include "overrides.h"
 #include "backend_log.h"
-#include "cvars.h"                  /* sh_cvar_value_int_reg + B2_CVAR_SH_USER_OVERRIDES */
+#include "user_overrides.h"
 #include "overrides_baked.h"        /* the built-in "*Custom"-tab default decls (Timeline + Unknown) */
 
 /* The engine open-by-name vtable method offset within the resource-provider vtable.
@@ -51,13 +51,6 @@ static volatile LONG g_shadow_count = 0;
 
 /* The overrides ROOT (holds overrides\ + overrides\shader_includes\). Default %LOCALAPPDATA%\snapmap-plus. */
 static char g_root[MAX_PATH] = {0};
-
-/* PERSISTENT user-layer kill switch: a marker FILE `<root>\overrides.disabled` (contents ignored).
- * The sh_user_overrides cvar covers the same bisect but resets to 1 every launch and can only take
- * effect before the first SnapMap entry of a session -- the marker survives restarts and needs no
- * console. Evaluated once at install (i.e. per game launch): create or delete the file, then restart.
- * Built-in defaults and the game's own resources still serve while it is present. */
-static volatile LONG g_user_layer_off = 0;
 
 /* ============================================================ our idFile-subclass stream ===========
  * A reimplementation of OG's PTR_FUN_18003d050 stream (the engine idFile interface, 24 virtual
@@ -300,15 +293,6 @@ static void resolve_root(char *out, size_t cap)
     else default_root(out, cap);
 }
 
-/* The persistent kill-switch marker check (see g_user_layer_off above). */
-static int user_layer_marker_present(void)
-{
-    char root[MAX_PATH], p[MAX_PATH];
-    resolve_root(root, sizeof root);
-    _snprintf_s(p, sizeof p, _TRUNCATE, "%s\\overrides.disabled", root);
-    return GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES;
-}
-
 /* Build the on-disk override path for engine resource `name` into `out`. Returns 1 if a path was built
  * (always, for a non-empty name). The selection mirrors OG FUN_18000b110 EXACTLY (see the block comment
  * above): the shader_includes branch is the RARE exception for ".inc"-suffixed shader-include names; every
@@ -469,9 +453,8 @@ static ov_stream *open_user_for_baked_name(const char *name, int *malformed)
 /* The override-open hook -- our value in the engine's open vtable slot. Same ABI as the engine method.
  * mode>=2 (OG param_5>=2) is a recursion/no-shadow guard -> straight to the original. Otherwise resolve
  * three-layer: USER disk file -> BUILT-IN baked default (from memory) -> chain to the engine original.
- * The user layer is gated by the sh_user_overrides cvar (default 1; reads as 1 until the cvar is
- * registered, so early-boot opens behave normally). SEH-guarded so a shadow path fault degrades to a
- * vanilla open. */
+ * The user layer alone is gated by the immutable launch snapshot. SEH-guarded so a shadow path fault
+ * degrades to a vanilla open. */
 static void *ov_open_hook(void *self, const char *name, unsigned char b1, unsigned char b2, unsigned int mode)
 {
     if (g_orig_open == NULL) return NULL;   /* defensive: never happens once installed */
@@ -481,8 +464,7 @@ static void *ov_open_hook(void *self, const char *name, unsigned char b1, unsign
         const char *src = NULL;
         __try {
             const ov_baked_decl_t *baked = find_baked(name);
-            int user_on = (g_user_layer_off == 0)
-                       && sh_cvar_value_int_reg(B2_CVAR_SH_USER_OVERRIDES, 1);
+            int user_on = sh_user_overrides_enabled_for_launch();
             if (user_on) {
                 if (baked) {
                     int malformed = 0;
@@ -496,7 +478,8 @@ static void *ov_open_hook(void *self, const char *name, unsigned char b1, unsign
             }
             if (s == NULL && baked != NULL) {
                 s = make_mem_stream((const unsigned char *)baked->text, (long long)baked->len, name, 0);
-                if (s && src == NULL) src = user_on ? "built-in" : "built-in (user layer off)";
+                if (s && src == NULL)
+                    src = user_on ? "built-in" : "built-in (user layer disabled by config)";
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             s = NULL;   /* any fault in the shadow path -> fall through to the original open */
@@ -642,17 +625,19 @@ static void audit_user_overrides(void)
         int count = 0, named = 0, warned = 0;
         audit_walk(dir, "", 0, &count, &named, &warned);
         char msg[MAX_PATH + 192];
-        if (g_user_layer_off) {
+        if (!sh_user_overrides_enabled_for_launch()) {
             _snprintf_s(msg, sizeof msg, _TRUNCATE,
-                        "B1: overrides audit -- user layer DISABLED by overrides.disabled marker; "
-                        "%d file(s) under %s are ignored (delete the marker + restart to re-enable)",
+                        "B1: overrides audit -- user layer DISABLED by config; "
+                        "%d file(s) under %s are ignored (set sh_user_overrides 1 "
+                        "and restart DOOM to re-enable)",
                         count, dir);
         } else {
             _snprintf_s(msg, sizeof msg, _TRUNCATE,
-                        "B1: overrides audit -- %d user override file(s) active under %s%s%s "
-                        "(bisect: sh_user_overrides 0 before entering SnapMap, or create "
-                        "overrides.disabled next to the overrides folder + restart)",
-                        count, dir, warned ? ", " : "", warned ? "with structural warnings above" : "");
+                        "B1: overrides audit -- %d user override file(s) active "
+                        "under %s%s%s (bisect: set sh_user_overrides 0 and "
+                        "restart DOOM)",
+                        count, dir, warned ? ", " : "",
+                        warned ? "with structural warnings above" : "");
         }
         backend_log(msg);
     } __except (EXCEPTION_EXECUTE_HANDLER) { backend_log("B1: overrides audit skipped (fault)"); }
@@ -709,7 +694,6 @@ int sh_overrides_install(void *ctor_fn, int ctor_status_ok)
     g_slot = slot;
 
     if (!g_root[0]) default_root(g_root, sizeof g_root);
-    g_user_layer_off = user_layer_marker_present();   /* persistent kill switch, read once per launch */
     reclaim_baked_overrides();   /* delete OUR untouched previously-written defaults (memory layer serves now) */
     audit_user_overrides();      /* log what the user's folder actively shadows */
     _snprintf_s(line, sizeof line, _TRUNCATE,

@@ -90,6 +90,13 @@ static const config_descriptor g_registry[] = {
         SH_CONFIG_UI_READ | SH_CONFIG_UI_WRITE,
         validate_entity_selection_mode,
         normalize_entity_selection_mode
+    },
+    {
+        "overrides.user_enabled", SH_JSON_BOOL, "true",
+        SH_CONFIG_BACKEND_READ | SH_CONFIG_BACKEND_WRITE |
+        SH_CONFIG_UI_READ | SH_CONFIG_UI_WRITE,
+        NULL,
+        normalize_bool
     }
 };
 
@@ -1204,6 +1211,24 @@ int sh_config_get_json(const char *key, char *out_json, int out_capacity,
                                out_capacity, out_flags);
 }
 
+int sh_config_get_bool(const char *key, int *out_value,
+                       unsigned int *out_flags)
+{
+    char json[6];
+    int length;
+    if (!out_value) return 0;
+    length = sh_config_get_json(key, json, (int)sizeof(json), out_flags);
+    if (length == 4 && strcmp(json, "true") == 0) {
+        *out_value = 1;
+        return 1;
+    }
+    if (length == 5 && strcmp(json, "false") == 0) {
+        *out_value = 0;
+        return 1;
+    }
+    return 0;
+}
+
 static int set_json_for_access(const char *key, const char *value_json,
                                unsigned int access)
 {
@@ -1281,6 +1306,7 @@ static int set_json_for_access(const char *key, const char *value_json,
     }
     if (repaired) g_status_flags |= SH_CONFIG_STATUS_REPAIRED;
     if (!install_document_values_locked(&document)) goto volatile_value;
+    g_status_flags &= ~SH_CONFIG_STATUS_VOLATILE;
     result = SH_CONFIG_SET_PERSISTED;
     goto done;
 
