@@ -58,12 +58,20 @@ panel. The panel owns an Apply/Cancel draft tied to the current editable map.
 Apply stores a versioned `smp.render.v1` string in native map variables; the
 native serializer carries it through normal saves without a sidecar. The
 reserved value contains view distance, fog strength, start/end and linear RGB.
-Missing metadata uses defaults; malformed or duplicate metadata disables the
+Version 3 stores only these seven values. Version 1 and enabled version 2 values
+are read directly; disabled version 2 maps migrate to native defaults. Missing
+metadata also uses native defaults. Save/Play conversion writes the current
+canonical values without reallocating an unchanged string or shifting variable
+indices. Malformed or duplicate metadata disables the
 override. The reserved variable should not be edited through generic variables.
 Map deserialization clears the previous runtime selection and reads the loaded
 map's variables. Editor-to-play conversion refreshes that selection from the
 current editable map. A locked value copy crosses to rendering, where the
-blended environment's literal view-distance and fog values are changed before
+blended environment's literal view-distance and fog values are changed independently:
+view distance 8192 or zero leaves native distance intact, and fog strength zero
+leaves native fog intact. Fog range/color values do not enable an override while
+strength is zero. The controls are always editable and there is no stored enable
+flag. Overrides run before
 the engine reads its far clip. This applies only to SnapMap and uses signed
 bindings in both renderer executables. No WebView interface change is involved.
 
@@ -105,6 +113,27 @@ Door apertures and agent clearance remain fixed. Narrow strips that collapse
 at the shrink minimum are removed with their area references, cover membership,
 visibility and route chains remapped. Native BuildAAS performs module placement
 and assembly, and marked blocking volumes augment the resized base navigation.
+
+Object-mode containment first uses the native query. If its fixed 6000-unit
+vertical rays miss an admitted taller variant, a bounded fallback extends both
+rays to that room's height. Both native body hits must identify the same valid
+module; world bounds alone never authorize placement. Resizing also refreshes
+the native per-module placement-display models inside the process heap scope,
+including after rollback. Otherwise Object Mode can retain the previous size's
+display resources until the camera is re-entered.
+
+The native XYZ inspector shares a context with Grid Offset. Its base reset
+clears values but leaves the range list populated. AddVec3 clears the validated
+range count before native construction so each inspector rebuilds its own three
+ranges. Allocation ownership stays native; the separate door-cap and portal
+minimum checks still determine the smallest accepted room dimensions.
+
+The faint green surface display is the game's navigation-class placement
+overlay, separate from the custom blocking-volume preview. The held entity's
+native navigation type selects one of three installed display models. Objects
+without that type do not request a model. The native material uses world-space
+grid coordinates and animated brightness, so its apparent intensity can vary
+while the model remains visible. The resize path preserves these native rules.
 
 Reload has a separate palette membership probe; it now shares the variant lookup
 so saved rooms reach instance conversion. Cold construction can run before editor

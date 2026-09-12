@@ -301,6 +301,14 @@ uintptr_t sig_addr_by_name(const sig_result *results, size_t n, const char *name
  * entry changes with tests/run-tests.ps1 -Doom <pinned> -DoomAlt <other-renderer>.
  * CI has no game image and cannot verify these identities. */
 const sig_entry BACKEND_ENGINE_SIGNATURES[] = {
+    /* Resized-room containment: independently verified on Vulkan and OpenGL. */
+    { "GridRefreshPlacementSurfaces",
+      "40 57 48 83 EC 30 48 C7 44 24 20 FE FF FF FF 48 89 5C 24 48 48 89 6C 24 50 "
+      "48 89 74 24 58 49 8B E8 48 8B F2 48 8B D9 E8 ?? ?? ?? ?? 8B BE 58 07 00 00 3B 7B 0C", 0 },
+    { "GridContainingModule",
+      "48 8B C4 48 89 58 08 48 89 68 10 57 48 81 EC B0 00 00 00 F3 0F 10 05 ?? ?? ?? ?? 4C 8D 4C 24 40 F3 0F 10 0D ?? ?? ?? ?? 48 8B DA", 0 },
+    { "GridModuleRay",
+      "40 55 53 57 48 8D 6C 24 90 48 81 EC 70 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 30 80 79 48 00 48 8B DA 48 8B 95 B8 00 00 00 49 8B F9 75 40 48 C7 45 88 00 00 00 00", 0 },
     /* Native map rendering controls and the environment far-clip read.
      * Each binding is unique in both independently linked renderer images. */
     { "RenderSettingsEnter",

@@ -30,7 +30,7 @@ static void *g_widgets[SH_RENDER_FIELDS];
 
 typedef struct field_info {const char *name,*label,*help;float min,max,small_step,large_step;} field_info;
 static const field_info fields[SH_RENDER_FIELDS]={
-    {"View Distance","#str_smp_render_distance","#str_smp_render_distance_help",256,200000,256,4096},
+    {"View Distance","#str_smp_render_distance","#str_smp_render_distance_help",0,200000,256,4096},
     {"Fog Strength","#str_smp_render_strength","#str_smp_render_strength_help",0,100,1,10},
     {"Fog Start","#str_smp_render_start","#str_smp_render_start_help",0,199999,100,1000},
     {"Fog End","#str_smp_render_end","#str_smp_render_end_help",1,200000,100,1000},

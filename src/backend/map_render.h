@@ -6,9 +6,12 @@
 
 #define SH_RENDER_VARIABLE "smp.render.v1"
 #define SH_RENDER_FIELDS 7
+#define SH_RENDER_NATIVE_DISTANCE 8192.0f
 typedef struct sh_map_render { float value[SH_RENDER_FIELDS]; } sh_map_render;
 /* View distance, fog strength (percent), start, end, and linear RGB. */
 void sh_map_render_default(sh_map_render *settings);
+int sh_map_render_distance_override(const sh_map_render *settings);
+int sh_map_render_fog_override(const sh_map_render *settings);
 int sh_map_render_valid(const sh_map_render *settings);
 int sh_map_render_decode(const char *text, sh_map_render *settings);
 int sh_map_render_encode(const sh_map_render *settings, char *out, size_t cap);
