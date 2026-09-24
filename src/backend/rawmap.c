@@ -395,19 +395,11 @@ int sh_rawmap_branch_install(const unsigned char *module_base)
  */
 static char *prepare_map_buffer_mode(const char *json, int publish)
 {
-    char *pkg, *nav, *migrated;
+    char *pkg, *nav;
     size_t len = json ? strlen(json) : 0;
     size_t nav_len = 0;
 
     if (len == 0) return NULL;
-
-    /* Convert the old bake marker before both the bake and native entity parse.
-     * This runs for normal loads as well as explicit rawmap substitution. */
-    migrated = sh_nav_regions_migrate(json, len, &len);
-    if (migrated) {
-        json = migrated;
-        backend_log("NAV: migrated Blocking Box navigation markers to flags.noFlood");
-    }
 
     if (publish) sh_navmesh_build_from_map(json, len);
     /* The regions the author marked, read from the same bytes and cleared the
@@ -415,13 +407,9 @@ static char *prepare_map_buffer_mode(const char *json, int publish)
     if (publish) sh_nav_bake_set_map(json, len);
 
     pkg = mpkg_strip_guarded(json);
-    if (!publish && !pkg && sh_mpkg_scan(json, len, NULL, 0)) {
-        if (migrated) HeapFree(GetProcessHeap(), 0, migrated);
-        return NULL;
-    }
+    if (!publish && !pkg && sh_mpkg_scan(json, len, NULL, 0)) return NULL;
     nav = sh_navmesh_strip(pkg ? pkg : json, pkg ? strlen(pkg) : len, &nav_len);
-    if (!nav && !pkg) return migrated;
-    if (migrated) HeapFree(GetProcessHeap(), 0, migrated);
+    if (!nav && !pkg) return NULL;
     if (!nav) return pkg;
     if (pkg) HeapFree(GetProcessHeap(), 0, pkg);
     return nav;
