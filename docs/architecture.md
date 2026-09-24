@@ -174,6 +174,12 @@ backend through a manual think loop at about 30 Hz. UI callbacks stage requests;
 the worker drains them and posts result messages. A UI mutex protects its shared
 request state, not the engine's objects.
 
+Selection, class/inherit, display-name, source and camera writes from the UI go
+through `run_on_main`. The backend runs the call after the next native frame
+while the worker waits. A call that has not started when its wait expires is
+withdrawn and never runs. A started call borrows the worker's data, so the
+worker waits for it to finish; the main thread never waits on the worker.
+
 Package, navigation and staging maintenance run after a successful native engine
 frame on DOOM's verified main thread. Recovery suppresses that pass. The frontend
 queue drain does not schedule native maintenance or display engine dialogs.
