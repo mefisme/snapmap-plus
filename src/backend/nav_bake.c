@@ -402,11 +402,14 @@ static const char *g_volumes_reason = "never tried";
 
 const char *sh_nav_bake_volumes_reason(void) { return g_volumes_reason; }
 
+/* A refused read keeps g_have_map but leaves g_loaded describing the read it threw away. */
+static int bake_map_held_locked(void) { return g_have_map && !g_live_refused; }
+
 int sh_nav_bake_volume_uids(int *out, int cap)
 {
     int n;
     AcquireSRWLockShared(&g_bake_lock);
-    n = g_have_map ? sh_nav_regions_volume_uids(out, cap) : 0;
+    n = bake_map_held_locked() ? sh_nav_regions_volume_uids(out, cap) : 0;
     ReleaseSRWLockShared(&g_bake_lock);
     return n;
 }
@@ -415,7 +418,7 @@ int sh_nav_bake_knows_volume(int uid)
 {
     int known;
     AcquireSRWLockShared(&g_bake_lock);
-    known = g_have_map && sh_nav_regions_knows_volume(uid);
+    known = bake_map_held_locked() && sh_nav_regions_knows_volume(uid);
     ReleaseSRWLockShared(&g_bake_lock);
     return known;
 }
@@ -429,7 +432,9 @@ void sh_nav_bake_conflicts(int *marked, int *rooms)
     AcquireSRWLockShared(&g_bake_lock);
     for (i = 0; i < g_module_count; i++) {
         m += g_preview[i].refused_count;
-        if (g_modules[i].regions > 0 && !g_preview[i].bytes) r++;
+        /* Until the bake catches up, a room without bytes is still building. */
+        if (g_preview_revision == g_geometry_revision &&
+            g_modules[i].regions > 0 && !g_preview[i].bytes) r++;
     }
     ReleaseSRWLockShared(&g_bake_lock);
     if (marked) *marked = m;
@@ -439,8 +444,8 @@ void sh_nav_bake_conflicts(int *marked, int *rooms)
 void sh_nav_bake_volume_counts(int *floors, int *walls)
 {
     AcquireSRWLockShared(&g_bake_lock);
-    if (floors) *floors = g_have_map ? g_map.region_count : 0;
-    if (walls)  *walls  = g_have_map ? g_map.obstacle_count : 0;
+    if (floors) *floors = bake_map_held_locked() ? g_map.region_count : 0;
+    if (walls)  *walls  = bake_map_held_locked() ? g_map.obstacle_count : 0;
     ReleaseSRWLockShared(&g_bake_lock);
 }
 
@@ -448,7 +453,7 @@ int sh_nav_bake_has_map(void)
 {
     int have;
     AcquireSRWLockShared(&g_bake_lock);
-    have = g_have_map;
+    have = bake_map_held_locked();
     ReleaseSRWLockShared(&g_bake_lock);
     return have;
 }
@@ -457,7 +462,7 @@ int sh_nav_bake_instance_count(void)
 {
     int n;
     AcquireSRWLockShared(&g_bake_lock);
-    n = g_have_map ? g_map.instance_count : 0;
+    n = bake_map_held_locked() ? g_map.instance_count : 0;
     ReleaseSRWLockShared(&g_bake_lock);
     return n;
 }

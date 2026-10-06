@@ -54,14 +54,15 @@ int sh_apply_engine_entity_transform(int id, float origin[3], float m[3][3],
  * navigation geometry is read when the map changes and at no other time. */
 void sh_apply_engine_install_edit_hook(const sig_result *results, size_t n);
 
-/* How much the editor has cost navigation since this DLL loaded. */
 /* Ask for the navigation view to be brought up to date. The read runs on the
  * game's own thread on the next frame, never on the caller's. */
 void sh_apply_engine_nav_request_update(void);
 
-/* Bit 0: the view no longer matches the map. Bit 1: an update is owed. */
+/* Bit 0: the view no longer matches the map. Bit 1: an update is owed.
+ * Bit 2: the map refused every read attempt. */
 int sh_apply_engine_nav_view_state(void);
 
+/* How much the editor has cost navigation since this DLL loaded. */
 void sh_apply_engine_nav_read_stats(unsigned *reads, unsigned *noticed, double *read_ms,
                                     unsigned *by_edit, unsigned *by_undo,
                                     unsigned *by_start, int *hooked);

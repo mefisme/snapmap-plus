@@ -404,6 +404,30 @@ static void test_complete_snapshot_tracks_creation_and_deletion(void)
     sh_nav_bake_set_snapshot(NULL, NULL);
 }
 
+static void test_refused_read_holds_no_map(void)
+{
+    const int owner[2] = {0, 0};
+    int uids[4], floors = -1, walls = -1;
+    printf("a refused read after a good one reports no map until the next good read\n");
+    sh_nav_bake_test_reset();
+    sh_nav_bake_set_snapshot(snapshot_read, NULL);
+    g_snapshot_json = make_map("ind_dlc/room", 1, 2, 3, 3, owner);
+    sh_nav_bake_refresh_live();
+    CHECK(sh_nav_bake_has_map());
+    CHECK(sh_nav_bake_volume_uids(uids, 4) > 0);
+    g_snapshot_json = NULL;
+    sh_nav_bake_refresh_live();
+    CHECK_MSG(!sh_nav_bake_has_map(), "the poll must not fingerprint a refused read");
+    CHECK(sh_nav_bake_volume_uids(uids, 4) == 0);
+    sh_nav_bake_volume_counts(&floors, &walls);
+    CHECK(floors == 0 && walls == 0);
+    CHECK(sh_nav_bake_instance_count() == 0);
+    g_snapshot_json = make_map("ind_dlc/room", 1, 2, 3, 3, owner);
+    sh_nav_bake_refresh_live();
+    CHECK(sh_nav_bake_has_map());
+    sh_nav_bake_set_snapshot(NULL, NULL);
+}
+
 static void test_snapshot_moves_and_changes_ownership(void)
 {
     static sh_nav_map map;
@@ -727,6 +751,7 @@ int main(void)
     test_refresh_live_is_callable_from_the_editor();
     test_refresh_live_without_a_map_is_a_no_op();
     test_complete_snapshot_tracks_creation_and_deletion();
+    test_refused_read_holds_no_map();
     test_snapshot_moves_and_changes_ownership();
     printf("%s -- %d checks, %d failed\n", g_fail ? "FAILED" : "ok", g_checks, g_fail);
     return g_fail ? 1 : 0;

@@ -1516,6 +1516,14 @@ static void test_duplicate_box_ids(void)
         CHECK(!sh_nav_regions_refresh_known(&m, live_valid, live_json, NULL, &live,
                                             &reads, &why));
         CHECK(reads == 0 && live.valid_calls == 0);
+        /* The flagged boxes stay tracked, so moving or deleting one still marks the view. */
+        {
+            int uids[4];
+            CHECK(sh_nav_regions_volume_uids(uids, 4) == 2 && uids[0] == 7 && uids[1] == 7);
+            CHECK(sh_nav_regions_knows_volume(7));
+        }
+        CHECK(sh_nav_regions_refresh_live(&m, 8, live_valid, live_json, &live) == -1);
+        CHECK(live.valid_calls == 0);
         free(json);
     }
     /* The shared ID cannot decide which box belongs to which room. */

@@ -225,8 +225,8 @@ typedef int (*sh_get_prefab_mesh_fn)(struct sh_iface *self, void *out_blob, int 
 #define SH_PREFAB_DEFAULT_SCALE 0x2
 #endif
 /* The navigation view. `update` asks for it to be brought up to date on the
- * game's next frame; 0 only reports. Writes {"stale":N,"pending":N} and
- * returns its length. */
+ * game's next frame; 0 only reports. Writes {"stale","pending","floors","walls",
+ * "red","rooms","refused"}, all integers, and returns its length. */
 typedef int (*sh_navmesh_view_fn)(struct sh_iface *self, int update,
                                   char *out_json, int cap);
 

@@ -156,9 +156,10 @@ still reference them. Save files contain the dimension-bearing module identity;
 players need Snapmap+ to reconstruct its resources. Vanilla loading is unsupported.
 
 The shared object uses an append-only vtable. Its original 77-slot prefix is
-retained, with extensions through `+0x338`; the current table occupies `0x340`
-bytes. The last three are the File menu's rawmap surface: `rawmap_status`
-(`+0x328`), `rawmap_configure` (`+0x330`) and `rawmap_load_now` (`+0x338`).
+retained, with extensions through `+0x348`; the current table occupies `0x350`
+bytes. The File menu's rawmap surface is `rawmap_status` (`+0x328`),
+`rawmap_configure` (`+0x330`) and `rawmap_load_now` (`+0x338`). The last two
+are `navmesh_view` (`+0x340`) and `run_on_main` (`+0x348`).
 Static assertions pin the layout. Do not insert, reorder or repurpose
 existing slots. Add new capability slots at the end and update both DLLs.
 
