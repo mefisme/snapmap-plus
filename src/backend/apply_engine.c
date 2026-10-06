@@ -2168,6 +2168,9 @@ static void ae_nav_refresh_cmd(void)
             SH_PERF_END(SH_PERF_NAV_PREVIEW, tp);
 
             g_nav_was_holding = ae_nav_holding(ed);
+        } else {
+            /* Nothing can be read here, so a View menu request ends unanswered. */
+            InterlockedExchange(&g_nav_update_requested, 0);
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         sh_nav_preview_clear();
@@ -2299,7 +2302,9 @@ static void ae_nav_refresh_poll(void)
     /* Both consumers of the read -- the green preview and the resource served at
      * Play -- are off with navigation disabled, so the read has no reader. */
     if (!sh_config_get_bool("navmesh.enabled", &enabled, NULL) || !enabled) {
-        sh_nav_preview_clear(); g_preview_built_revision = ~0UL; return;
+        sh_nav_preview_clear(); g_preview_built_revision = ~0UL;
+        InterlockedExchange(&g_nav_update_requested, 0);
+        return;
     }
 
     /* A different map object is a different map, and nothing cached survives it. */
@@ -2310,6 +2315,14 @@ static void ae_nav_refresh_poll(void)
         g_nav_read_tries = 0;
         g_nav_stale = 0;
         g_nav_seen_valid = 0;
+    }
+
+    if (ae_nav_holding(ed)) {
+        /* Mid-drag the lines sit where the volume was picked up from, so they
+         * come down until it is put back. */
+        if (!g_nav_was_holding) sh_nav_preview_clear();
+        g_nav_was_holding = 1;
+        return;
     }
 
     /* Undo and redo never reach CommitEdit. They move the undo cursor, and so
@@ -2340,13 +2353,6 @@ static void ae_nav_refresh_poll(void)
         }
     }
 
-    if (ae_nav_holding(ed)) {
-        /* Mid-drag the lines sit where the volume was picked up from, so they
-         * come down until it is put back. */
-        if (!g_nav_was_holding) sh_nav_preview_clear();
-        g_nav_was_holding = 1;
-        return;
-    }
     /* Letting go is not an edit. A cancelled placement, and stepping in and out
      * of a menu, both end a hold without changing the map, so the lines are put
      * back from the geometry already in hand and nothing is read. */

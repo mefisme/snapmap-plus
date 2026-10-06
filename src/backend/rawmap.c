@@ -388,8 +388,8 @@ int sh_rawmap_branch_install(const unsigned char *module_base)
     return 1;
 }
 
-/* Prepare the chosen JSON before native parsing: migrate markers, rebuild
- * map-scoped navigation state, then strip package and navigation envelopes.
+/* Prepare the chosen JSON before native parsing: rebuild map-scoped
+ * navigation state, then strip package and navigation envelopes.
  * Each failed strip retains the preceding buffer. Returns an owned process-
  * heap buffer or NULL to use the original.
  */

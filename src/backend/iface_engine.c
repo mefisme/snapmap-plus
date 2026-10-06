@@ -469,7 +469,6 @@ static int slot_get_prefab_mesh(sh_iface *self, void *out_blob, int out_capacity
     return sh_prefabpreview_get(out_blob, out_capacity);
 }
 
-/* Sparse prefab state omits inherited scale; resolve defaults for preview dimensions. */
 /* The View menu's navigation entry. The read itself runs on the game's thread
  * a frame later, so this only asks and reports. */
 static int slot_navmesh_view(sh_iface *self, int update, char *out_json, int cap)
@@ -490,6 +489,7 @@ static int slot_navmesh_view(sh_iface *self, int update, char *out_json, int cap
                        (state & 4) ? 1 : 0);
 }
 
+/* Sparse prefab state omits inherited scale; resolve defaults for preview dimensions. */
 static int slot_resolve_prefab_defaults(sh_iface *self, const char *inherit_name,
                                         char *out_model, int out_capacity,
                                         float *out_scale, int out_scale_count)

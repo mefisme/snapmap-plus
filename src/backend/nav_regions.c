@@ -549,6 +549,8 @@ static struct {
     /* The editor's own module index per entity, checked against the ownership
      * the map text gave: 0 not yet checked, 1 agreed, -1 disagreed. */
     int               live_instance;
+    /* Copies the map's ids_unusable: the list still fingerprints, but no refresh may address by id. */
+    int               ids_unusable;
 } g_loaded;
 
 /* The volumes this map's navigation is actually built from: cached, and
@@ -687,6 +689,7 @@ int sh_nav_regions_read_resolved(const char *json, size_t len, sh_nav_map *out,
     g_loaded.owner = NULL;
     g_loaded.count = 0;
     g_loaded.live_instance = 0;
+    g_loaded.ids_unusable = 0;
     if (!json || len == 0) return 0;
     if (!sh_shard_doc_build(json, len, &doc)) return 0;
     if (doc.c[0].kind != '{') {
@@ -847,7 +850,7 @@ int sh_nav_regions_read_resolved(const char *json, size_t len, sh_nav_map *out,
 
     /* This map, and only this one, may now be refreshed from the live editor,
      * and only while every box can be addressed by its own id. */
-    if (out->ids_unusable) g_loaded.count = 0;
+    g_loaded.ids_unusable = out->ids_unusable;
     g_loaded.owner = out;
 
     sh_shard_doc_free(&doc);
@@ -969,7 +972,7 @@ int sh_nav_regions_refresh_live(sh_nav_map *m, int highest_id,
     /* Without cached volumes, every ownership lookup would fail; skip engine
      * serialization.
      */
-    if (g_loaded.count == 0) return -1;
+    if (g_loaded.count == 0 || g_loaded.ids_unusable) return -1;
 
     top = highest_id;
     if (top > NAVR_LIVE_SCAN_MAX) top = NAVR_LIVE_SCAN_MAX;
@@ -1079,7 +1082,7 @@ int sh_nav_regions_refresh_known(sh_nav_map *m,
     if (!why) why = &ignored;
     *why = "the cached box inventory is unavailable";
     if (read_count) *read_count = 0;
-    if (!m || !valid || !get_json || m != g_loaded.owner ||
+    if (!m || !valid || !get_json || m != g_loaded.owner || g_loaded.ids_unusable ||
         !g_loaded.count || g_loaded.count >= NAVR_MAX_VOLUMES) return 0;
     next = (sh_nav_map *)malloc(sizeof *next);
     json = (char *)malloc(NAVR_LIVE_JSON_CAP);

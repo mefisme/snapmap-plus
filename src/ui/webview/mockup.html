@@ -3107,6 +3107,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     label.setAttribute('aria-expanded', 'true');
     popup.hidden = false;
     OPEN_MENU = name;
+    if (name === 'view') post({cmd: 'navmeshState'});
     if (focusFirst) {
       var first = popup.querySelector('button:not(:disabled)');
       if (first) first.focus();
@@ -3338,8 +3339,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
       post({cmd: 'navmeshUpdate'});
       closeMenus();
     });
-    var lbl = document.querySelector('.menu-label[data-menu="view"]');
-    if (lbl) lbl.addEventListener('click', function(){ post({cmd: 'navmeshState'}); });
   })();
   (function(){
     var dark = document.documentElement.classList.contains('dark');
