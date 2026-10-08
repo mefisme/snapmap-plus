@@ -878,6 +878,7 @@ static void slot_rebuild_declsource(sh_iface *self, int id, const char *cstr)
     if (!defsub) return;
     __try { g_decl_rebuild(defsub, cstr, 1); }
     __except (EXCEPTION_EXECUTE_HANDLER) {}
+    sh_apply_engine_nav_decl_rewritten(id);
 }
 
 /* Remove the ID from selection; synchronize idle state if selection becomes empty. */

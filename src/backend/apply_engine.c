@@ -2212,6 +2212,13 @@ static void ae_apply_tree_detour(void *entity, void *tree)
     if (g_apply_tree_tramp) g_apply_tree_tramp(entity, tree);
 }
 
+void sh_apply_engine_nav_decl_rewritten(int id)
+{
+    ae_nav_mark_dirty(id);
+    InterlockedExchange(&g_nav_volume_property, 1);
+    InterlockedExchange(&g_nav_edit_pending, 1);
+}
+
 static void *ae_detour_named(const sig_result *results, size_t n, const char *name,
                              void *detour, size_t stolen, const char *what)
 {

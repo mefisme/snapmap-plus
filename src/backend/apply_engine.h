@@ -58,6 +58,10 @@ void sh_apply_engine_install_edit_hook(const sig_result *results, size_t n);
  * game's own thread on the next frame, never on the caller's. */
 void sh_apply_engine_nav_request_update(void);
 
+/* An entity's decl text was replaced in place, which reaches neither CommitEdit
+ * nor GridApplyEntityTree. Main thread only. */
+void sh_apply_engine_nav_decl_rewritten(int id);
+
 /* Bit 0: the view no longer matches the map. Bit 1: an update is owed.
  * Bit 2: the map refused every read attempt. */
 int sh_apply_engine_nav_view_state(void);
